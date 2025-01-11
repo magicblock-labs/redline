@@ -1,0 +1,19 @@
+[workspace]
+members = [
+	"bencher-tool", 
+	"bencher-program", "accounts-fetcher", 
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.2.1"
+authors = ["Magicblock Labs <dev@magicblock.gg>"]
+edition = "2021"
+license = "MIT"
+homepage = "https://www.magicblock.gg/"
+documentation = "https://docs.magicblock.gg/"
+repository = "https://github.com/magicblock-labs/magicblock-bencher"
+readme = "../README.md"
+keywords = ["solana", "crypto", "ephemeral-rollups", "magicblock", "benchmark"]
+

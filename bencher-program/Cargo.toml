@@ -1,0 +1,25 @@
+[package]
+name = "bencher-program"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+documentation = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+readme = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "2.1.7"
+borsh = "1.5.3"
+
+[dependencies.sdk]
+package = "ephemeral-rollups-sdk"
+git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git"
+branch = "solana-upgrade"
+# path = "../../ephemeral-rollups-sdk/rust/sdk"

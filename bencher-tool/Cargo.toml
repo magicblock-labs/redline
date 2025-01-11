@@ -1,0 +1,40 @@
+[package]
+name = "bencher"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+documentation = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+readme = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+tokio = { version = "1.0", features = [ "rt", "macros" ] }
+reqwest = { version = "0.12", default-features = false, features = [ "http2", "json", "default-tls" ] }
+websocket = { package = "ratchet_rs", version = "1.2.1" } # ws client
+futures = "0.3"
+
+json = { package = "serde_json", version = "1.0" }
+bincode = "1.3.3"
+base64 = "0.22"
+borsh = "1.5.3"
+serde = { version = "1.0", features = [ "derive" ] }
+toml = "0.8"
+sysinfo = { version = "0.33", default-features = false, features = [ "disk", "network" ] }
+
+duration = { package = "duration-str", version = "0.12", default-features = false, features = [ "serde" ] }
+
+bytes = "1.9"
+url = { version = "2.5", features = [ "serde" ] }
+
+solana = { package = "solana-sdk", version = "2.1.7" }
+sdk = { package = "ephemeral-rollups-sdk", path = "../../ephemeral-rollups-sdk/rust/sdk" }
+# transaction = { package = "solana-transaction", version = "0.0.2", features = [ "serde" ] }
+# instruction = { package = "solana-instruction", version = "2.1.7", features = [ "serde" ] }
+# keypair = { package = "solana-keypair", version = "0.0.2" }
+# signer = { package = "solana-signer", version = "0.0.2" }
+# pubkey = { package = "solana-pubkey", version = "2.1.7" }
+
+benchprog = { package = "bencher-program", path = "../bencher-program" }
