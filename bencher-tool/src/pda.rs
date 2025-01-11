@@ -33,7 +33,7 @@ impl Pda {
         let (pubkey, bump) =
             Pubkey::find_program_address(&[pubkey.as_ref(), SEEDS], &benchprog::ID);
         Self {
-            payer: payer.into(),
+            payer,
             pubkey,
             bump,
             sub: 0,

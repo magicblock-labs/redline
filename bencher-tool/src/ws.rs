@@ -4,10 +4,12 @@ use bytes::BytesMut;
 use json::Value;
 use solana::{pubkey::Pubkey, signature::Signature};
 use tokio::net::TcpStream;
+use tokio_native_tls::{native_tls, TlsConnector, TlsStream};
+use url::Url;
 use websocket::{Message, NoExt};
 
 pub struct WebsocketClient {
-    inner: websocket::WebSocket<TcpStream, NoExt>,
+    inner: websocket::WebSocket<TlsStream<TcpStream>, NoExt>,
     buffer: BytesMut,
 }
 
@@ -53,9 +55,16 @@ macro_rules! crash {
     };
 }
 impl WebsocketClient {
-    pub async fn connect(host: &str) -> Result<Self, Box<dyn Error>> {
-        let stream = TcpStream::connect(host).await?;
-        let client = websocket::subscribe(Default::default(), stream, "/").await?;
+    pub async fn connect(url: Url) -> Result<Self, Box<dyn Error>> {
+        let port = url.port_or_known_default().unwrap_or_default();
+        let host = url.host_str().unwrap_or_default();
+        let host_and_port = format!("{host}:{port}");
+        println!("HAP: {host_and_port}");
+        let stream = TcpStream::connect(host_and_port).await?;
+        let connector = native_tls::TlsConnector::new().unwrap();
+        let connector = TlsConnector::from(connector);
+        let stream = connector.connect(host, stream).await.unwrap();
+        let client = websocket::subscribe(Default::default(), stream, url.as_str()).await?;
         let inner = client.into_websocket();
         let buffer = BytesMut::with_capacity(1024);
         Ok(Self { inner, buffer })

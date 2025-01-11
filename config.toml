@@ -1,0 +1,8 @@
+
+mode = { raw-speed = { space = 128 } }
+concurrency = 256
+duration = { time = "1m" }
+chain = "https://api.devnet.solana.com/"
+ephem = "https://devnet.magicblock.app/"
+ws = "wss://devnet.magicblock.app"
+keypairs = ["/users/babur/bencher.json"]

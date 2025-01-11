@@ -11,7 +11,7 @@ pub struct Config {
     pub duration: BenchDuration,
     pub chain: Url,
     pub ephem: Url,
-    pub ws: String,
+    pub ws: Url,
     pub keypairs: Vec<PathBuf>,
 }
 

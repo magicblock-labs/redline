@@ -229,6 +229,7 @@ dependencies = [
  "solana-sdk",
  "sysinfo",
  "tokio",
+ "tokio-native-tls",
  "toml 0.8.19",
  "url",
 ]

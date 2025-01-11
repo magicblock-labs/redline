@@ -67,7 +67,7 @@ impl BenchRunner {
             BenchMode::RawSpeed { space } => space,
             BenchMode::CloneSpeed { .. } => size_of::<u64>() as u32,
         };
-        let mut ws = WebsocketClient::connect(&config.ws)
+        let mut ws = WebsocketClient::connect(config.ws)
             .await
             .expect("failed to connect to websocket");
         for (i, p) in pdas.iter_mut().enumerate() {

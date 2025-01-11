@@ -90,19 +90,15 @@ pub struct AccountInfo {
 
 impl SolanaClient {
     pub async fn info(&self, url: Url, pubkey: &Pubkey) -> AccountInfo {
+        let body = format!(
+            r#"{{"id":1,"jsonrpc":"2.0","method":"getAccountInfo","params":["{pubkey}",{{"encoding":"base64"}}]}}"#
+        );
+        println!("B: {body}");
         let response: Value = self
             .0
             .post(url)
             .header(CONTENT_TYPE, "application/json")
-            .body(format!(
-                r#"{{
-                    "id":1,"jsonrpc":"2.0","method":"getAccountInfo",
-                    params: [
-                        "{pubkey}",
-                        "params": {{ "encoding": "base64" }}
-                    ]
-                }}"#
-            ))
+            .body(body)
             .send()
             .await
             .expect("failed to fetch account from chain")
@@ -116,9 +112,12 @@ impl SolanaClient {
                 .unwrap_or_default()
         };
         let lamports = |v: &Value| {
-            v.get("lamports")
+            let lamports = v
+                .get("lamports")
                 .and_then(|l| l.as_u64())
-                .unwrap_or_default()
+                .unwrap_or_default();
+            println!("lamports: {lamports} - {v}");
+            lamports
         };
         let delegated = |v: &Value| {
             v.get("owner")
@@ -126,6 +125,7 @@ impl SolanaClient {
                 .map(|owner| owner == "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh")
                 .unwrap_or_default()
         };
+        println!("{response}");
         response
             .get("result")
             .and_then(|v| v.get("value"))
@@ -143,12 +143,7 @@ impl SolanaClient {
             .0
             .post(url)
             .header(CONTENT_TYPE, "application/json")
-            .body(format!(
-                r#"{{
-                    "id":1,"jsonrpc":"2.0","method":"requestAirdrop",
-                    params: [ "{pubkey}", 1000000000 ]
-                }}"#
-            ))
+            .body(format!(r#"{{"id":1,"jsonrpc":"2.0","method":"requestAirdrop","params":["{pubkey}",1000000000]}}"#))
             .send()
             .await
             .expect("failed to airdrop to account")

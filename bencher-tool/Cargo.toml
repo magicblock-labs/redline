@@ -12,6 +12,7 @@ edition = { workspace = true }
 
 [dependencies]
 tokio = { version = "1.0", features = [ "rt", "macros" ] }
+tokio-native-tls = "0.3"
 reqwest = { version = "0.12", default-features = false, features = [ "http2", "json", "default-tls" ] }
 websocket = { package = "ratchet_rs", version = "1.2.1" } # ws client
 futures = "0.3"
