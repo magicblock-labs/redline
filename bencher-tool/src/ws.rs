@@ -3,14 +3,14 @@ use std::error::Error;
 use bytes::BytesMut;
 use json::Value;
 use solana::{pubkey::Pubkey, signature::Signature};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::mpsc::Receiver};
 use tokio_native_tls::{native_tls, TlsConnector, TlsStream};
 use url::Url;
-use websocket::{Message, NoExt};
+use websocket::{Message, NoExtEncoder};
 
 pub struct WebsocketClient {
-    inner: websocket::WebSocket<TlsStream<TcpStream>, NoExt>,
-    buffer: BytesMut,
+    writer: websocket::Sender<TlsStream<TcpStream>, NoExtEncoder>,
+    rx: Receiver<BytesMut>,
 }
 
 pub struct WsNotification {
@@ -59,15 +59,31 @@ impl WebsocketClient {
         let port = url.port_or_known_default().unwrap_or_default();
         let host = url.host_str().unwrap_or_default();
         let host_and_port = format!("{host}:{port}");
-        println!("HAP: {host_and_port}");
         let stream = TcpStream::connect(host_and_port).await?;
         let connector = native_tls::TlsConnector::new().unwrap();
         let connector = TlsConnector::from(connector);
         let stream = connector.connect(host, stream).await.unwrap();
         let client = websocket::subscribe(Default::default(), stream, url.as_str()).await?;
         let inner = client.into_websocket();
-        let buffer = BytesMut::with_capacity(1024);
-        Ok(Self { inner, buffer })
+        let (writer, mut reader) = inner.split().unwrap();
+        let (tx, rx) = tokio::sync::mpsc::channel(1024);
+        tokio::task::spawn(async move {
+            loop {
+                let mut buffer = BytesMut::with_capacity(1024);
+                match reader.read(&mut buffer).await {
+                    Err(e) => {
+                        crash!("error reading from ws: {e}");
+                    }
+                    Ok(Message::Text) => {
+                        if tx.send(buffer).await.is_err() {
+                            return;
+                        }
+                    }
+                    _ => (),
+                }
+            }
+        });
+        Ok(Self { writer, rx })
     }
 
     pub async fn subscribe(&mut self, sub: WsSubscription) {
@@ -88,24 +104,15 @@ impl WebsocketClient {
                 )
             }
         };
-        if let Err(e) = self.inner.write_text(payload).await {
+        if let Err(e) = self.writer.write_text(payload).await {
             crash!("failed to send ws subscription: {e}");
         }
     }
 
     pub async fn next(&mut self) -> WsNotification {
-        self.buffer.clear();
-        loop {
-            match self.inner.read(&mut self.buffer).await {
-                Err(e) => {
-                    crash!("error reading from ws: {e}");
-                }
-                Ok(Message::Text) => break,
-                _ => (),
-            }
-        }
-        let Ok(payload) = json::from_slice::<Value>(&self.buffer) else {
-            let payload = String::from_utf8_lossy(&self.buffer);
+        let buffer = self.rx.recv().await.unwrap();
+        let Ok(payload) = json::from_slice::<Value>(&buffer) else {
+            let payload = String::from_utf8_lossy(&buffer);
             crash!("received garbage on websocket: {payload}");
         };
         if let Some(rid) = payload.get("result").and_then(Value::as_u64) {

@@ -13,10 +13,10 @@ fn main() {
     let path = env::args().nth(1).expect("usage: bencher config.toml");
     let config = read_to_string(path).expect("config path doesn't exist");
     let config: Config = toml::from_str(&config).expect("invalid config file");
-    let bencher = rt.block_on(BenchRunner::new(config));
     let local = LocalSet::new();
-    local.spawn_local(bencher.run());
-    rt.block_on(local);
+    let bencher = rt.block_on(local.run_until(BenchRunner::new(config)));
+    let f = local.run_until(bencher.run());
+    rt.block_on(f);
 }
 
 mod accounts_reader;
@@ -25,4 +25,5 @@ mod http;
 mod pda;
 mod runner;
 mod stats;
+mod system;
 mod ws;

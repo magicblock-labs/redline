@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, str::FromStr};
+use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 use base64::{prelude::BASE64_STANDARD, Engine};
 use json::Value;
@@ -26,7 +26,7 @@ impl TxnRequester {
         }
     }
 
-    pub async fn refresh_blockhash(&self) {
+    pub async fn refresh_blockhash(self: Arc<Self>) {
         let response: Value = self
             .client
             .post(self.url.clone())
@@ -65,11 +65,9 @@ impl TxnRequester {
         let response = request.send().await;
         let mut stats = TxnRequestStats::new(id);
         let Ok(response) = response else {
-            println!("failed to request anything");
             return stats;
         };
         if !response.status().is_success() {
-            println!("bad response: {response:?}");
             return stats;
         } else {
             stats.success = true;
@@ -93,7 +91,6 @@ impl SolanaClient {
         let body = format!(
             r#"{{"id":1,"jsonrpc":"2.0","method":"getAccountInfo","params":["{pubkey}",{{"encoding":"base64"}}]}}"#
         );
-        println!("B: {body}");
         let response: Value = self
             .0
             .post(url)
@@ -116,7 +113,6 @@ impl SolanaClient {
                 .get("lamports")
                 .and_then(|l| l.as_u64())
                 .unwrap_or_default();
-            println!("lamports: {lamports} - {v}");
             lamports
         };
         let delegated = |v: &Value| {
@@ -125,7 +121,6 @@ impl SolanaClient {
                 .map(|owner| owner == "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh")
                 .unwrap_or_default()
         };
-        println!("{response}");
         response
             .get("result")
             .and_then(|v| v.get("value"))

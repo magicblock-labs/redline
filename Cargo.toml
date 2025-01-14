@@ -1,7 +1,7 @@
 [workspace]
 members = [
 	"bencher-tool", 
-	"bencher-program", "accounts-fetcher", 
+	"bencher-program",
 ]
 
 resolver = "2"
@@ -16,4 +16,8 @@ documentation = "https://docs.magicblock.gg/"
 repository = "https://github.com/magicblock-labs/magicblock-bencher"
 readme = "../README.md"
 keywords = ["solana", "crypto", "ephemeral-rollups", "magicblock", "benchmark"]
+
+[workspace.dependencies]
+reqwest = { version = "0.12", default-features = false, features = [ "http2", "json", "default-tls" ] }
+tokio = { version = "1.0", features = [ "rt-multi-thread", "macros" ] }
 

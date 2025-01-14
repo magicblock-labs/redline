@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use benchprog::instruction::Instruction;
@@ -37,10 +38,10 @@ impl From<BenchMode> for BenchModeInner {
 }
 
 pub struct BenchRunner {
-    chain: Rc<TxnRequester>,
-    ephem: Rc<TxnRequester>,
+    chain: Arc<TxnRequester>,
+    ephem: Arc<TxnRequester>,
     concurrency: usize,
-    pdas: Vec<Rc<Pda>>,
+    pdas: Vec<Arc<Pda>>,
     next: usize,
     mode: BenchModeInner,
     duration: BenchDuration,
@@ -118,7 +119,8 @@ impl BenchRunner {
         };
         let start = Instant::now();
         let mut blockhash_refresher = interval(Duration::from_secs(45));
-        while iters > 0 && start.elapsed() > limit {
+        while iters > 0 && start.elapsed() < limit {
+            println!("I: {iters} -> {}", start.elapsed().as_secs_f64());
             tokio::select! {
                 biased;
                 Some(Ok(stat)) = self.pending.next(), if !self.pending.is_empty() => {
@@ -142,8 +144,8 @@ impl BenchRunner {
                     }
                 }
                 _ = blockhash_refresher.tick() => {
-                    self.chain.refresh_blockhash().await;
-                    self.ephem.refresh_blockhash().await;
+                    tokio::task::spawn(self.chain.clone().refresh_blockhash());
+                    tokio::task::spawn(self.ephem.clone().refresh_blockhash());
                 }
             }
             if self.pending.len() == self.concurrency {

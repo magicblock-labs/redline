@@ -1,7 +1,7 @@
 
 mode = { raw-speed = { space = 128 } }
-concurrency = 256
-duration = { time = "1m" }
+concurrency = 1000
+duration = { iters = 10000 }
 chain = "https://api.devnet.solana.com/"
 ephem = "https://devnet.magicblock.app/"
 ws = "wss://devnet.magicblock.app"
