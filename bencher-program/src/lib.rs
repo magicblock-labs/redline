@@ -51,6 +51,19 @@ fn process_instruction(
             )?;
             msg!("initialized PDA: {}", pda.key)
         }
+        Instruction::InitClonable { space, seed, bump } => {
+            let payer = next_account_info(&mut iter)?;
+            let pda = next_account_info(&mut iter)?;
+            create_pda(
+                pda,
+                &crate::ID,
+                space as usize,
+                &[&[payer.key.as_ref(), SEEDS, &[seed], &[bump]]],
+                next_account_info(&mut iter)?,
+                payer,
+            )?;
+            msg!("initialized clonable PDA: {}", pda.key)
+        }
         Instruction::Delegate => {
             let accounts = DelegateAccounts::try_from(accounts)?;
             let seeds = [accounts.payer.key.as_ref(), SEEDS];
@@ -65,23 +78,21 @@ fn process_instruction(
             }
             let mut data = pda.try_borrow_mut_data()?;
             let len = data.len() - 1;
-            data[..len].fill(value);
+            data[..len].fill(value as u8);
             // just playing around, nothing meaningful really
             data[len] = data[len].wrapping_add(1);
             msg!("filled {} PDA data with {}", pda.key, value)
         }
         Instruction::ComputeSum { index } => {
-            let index = index as usize;
             let pda = next_account_info(&mut iter)?;
             if pda.lamports() == 0 {
                 Err(ProgramError::UninitializedAccount)?;
             }
-            if pda.data_len() < index + size_of::<u64>() {
-                Err(ProgramError::AccountDataTooSmall)?;
-            }
             let mut data = pda.try_borrow_mut_data()?;
+            let align = size_of::<u64>();
+            let index = (index as usize % data.len()) / align * align;
             let sum = iter.map(|a| a.data_len() as u64).sum::<u64>();
-            data[index..index + size_of::<u64>()].copy_from_slice(&sum.to_le_bytes());
+            data[index..index + align].copy_from_slice(&sum.to_le_bytes());
             msg!(
                 "computed sum of {} accounts' data: {}",
                 accounts.len() - 1,

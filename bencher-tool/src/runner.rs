@@ -1,207 +1,162 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use benchprog::instruction::Instruction;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
-use solana::instruction::{AccountMeta, Instruction as SolanaInstruction};
-use solana::pubkey::Pubkey;
+use pubsub::nonblocking::pubsub_client::PubsubClient;
+use sdk::consts::DELEGATION_PROGRAM_ID;
+use solana::account::ReadableAccount;
+use solana::native_token::LAMPORTS_PER_SOL;
 use solana::signature::read_keypair_file;
 use solana::signer::Signer;
-use solana::transaction::Transaction;
-use tokio::task::JoinHandle;
-use tokio::time::interval;
+use tokio::sync::Semaphore;
 
-use crate::accounts_reader::AccountReader;
+use crate::client::SolanaClient;
 use crate::config::{BenchDuration, BenchMode, Config};
-use crate::http::{SolanaClient, TxnRequester};
 use crate::pda::Pda;
-use crate::stats::{LatencyCollection, TxnRequestStats};
-use crate::ws::{WebsocketClient, WsNotification, WsNotificationType, WsSubscription};
+use crate::stats::LatencyCollection;
 
 enum BenchModeInner {
     RawSpeed,
-    CloneSpeed { accounts: u8, reader: AccountReader },
+    CloneSpeed,
 }
 
 impl From<BenchMode> for BenchModeInner {
     fn from(mode: BenchMode) -> Self {
         match mode {
             BenchMode::RawSpeed { .. } => Self::RawSpeed,
-            BenchMode::CloneSpeed { accounts, pubkeys } => Self::CloneSpeed {
-                accounts,
-                reader: AccountReader::new(pubkeys),
-            },
+            BenchMode::CloneSpeed { .. } => Self::CloneSpeed,
         }
     }
 }
 
 pub struct BenchRunner {
-    chain: Arc<TxnRequester>,
-    ephem: Arc<TxnRequester>,
-    concurrency: usize,
-    pdas: Vec<Arc<Pda>>,
-    next: usize,
+    chain: Rc<SolanaClient>,
+    ephem: Rc<SolanaClient>,
+    ws: Rc<PubsubClient>,
+    pdas: Vec<Rc<Pda>>,
     mode: BenchModeInner,
     duration: BenchDuration,
-    ws: WebsocketClient,
-    latency: LatencyCollection,
-    pending: FuturesUnordered<JoinHandle<TxnRequestStats>>,
+    latency: Rc<RefCell<LatencyCollection>>,
+    concurrency: Arc<Semaphore>,
+    lag: Duration,
 }
 
 impl BenchRunner {
     pub async fn new(config: Config) -> Self {
-        let http = SolanaClient::default();
-        let keypairs = config
-            .keypairs
-            .into_iter()
-            .map(|p| read_keypair_file(p).expect("invalid payer keypair"));
-        let mut pdas = Vec::with_capacity(keypairs.len());
-        for k in keypairs {
-            pdas.push(Pda::new(config.chain.clone(), &http, k).await);
-        }
-        let chain = Rc::new(TxnRequester::new(config.chain));
-        let ephem = Rc::new(TxnRequester::new(config.ephem));
-        let mode = config.mode;
-        let space = match mode {
-            BenchMode::RawSpeed { space } => space,
-            BenchMode::CloneSpeed { .. } => size_of::<u64>() as u32,
-        };
-        let mut ws = WebsocketClient::connect(config.ws)
+        let chain = SolanaClient::new(config.chain);
+        let ephem = SolanaClient::new(config.ephem);
+        let ws: Rc<_> = PubsubClient::new(&config.ws)
             .await
-            .expect("failed to connect to websocket");
-        for (i, p) in pdas.iter_mut().enumerate() {
-            let id = (u32::MAX - i as u32) as u64;
-            ws.subscribe(WsSubscription::account(p.pubkey, id)).await;
-            // we loop to ignore potential account update notifications
-            loop {
-                if let WsNotification {
-                    id,
-                    ty: WsNotificationType::Result(_),
-                } = ws.next().await
-                {
-                    p.sub = id;
-                    break;
-                }
+            .expect("failed to connect to ws")
+            .into();
+        let mut pdas = Vec::<Rc<Pda>>::with_capacity(config.keypairs.len());
+        let space = config.mode.space();
+        for path in config.keypairs {
+            let payer = read_keypair_file(path).expect("failed to read keypair file");
+            let mut pda = Pda::new(&chain, payer, config.subscriptions, config.confirmations).await;
+            if let BenchMode::CloneSpeed { noise } = config.mode {
+                pda.generate_clones(&chain, noise).await;
             }
-            let account = http.info(chain.url.clone(), &p.pubkey).await;
-            if account.size as u32 == space {
+            pdas.push(pda.into());
+        }
+        let latency = Rc::new(RefCell::new(LatencyCollection::new(
+            config.duration.iters(),
+        )));
+        for (offset, pda) in pdas.iter().enumerate() {
+            println!("pda: {}", pda.pubkey);
+            let (lamports, owner, size) = chain
+                .get_account(&pda.pubkey)
+                .await
+                .map(|a| (a.lamports, a.owner, a.data().len() as u32))
+                .unwrap_or_default();
+            if config.subscriptions {
+                pda.subscribe(ws.clone(), latency.clone(), offset as u64);
+            }
+            if matches!(config.mode, BenchMode::RawSpeed { local: true, .. }) {
+                let _ = ephem
+                    .request_airdrop(&pda.payer.pubkey(), LAMPORTS_PER_SOL)
+                    .await;
+                pda.init(&ephem, space).await;
                 continue;
             }
-            if account.delegated {
-                p.undelegate(ephem.clone()).await;
-                // undelegation might take a while
-                tokio::time::sleep(Duration::from_secs(12)).await;
+            if lamports == 0 {
+                pda.init(&chain, space).await
             }
-            p.close(chain.clone()).await;
-            p.init(chain.clone(), space).await;
-            p.delegate(chain.clone()).await;
+            if size == space && owner == DELEGATION_PROGRAM_ID
+                || matches!(config.mode, BenchMode::CloneSpeed { .. })
+            {
+                continue;
+            }
+            if size != space {
+                if owner == DELEGATION_PROGRAM_ID {
+                    //println!("undelegating PDA: {}", pda.pubkey);
+                    pda.undelegate(&ephem).await;
+                    tokio::time::sleep(Duration::from_secs(15)).await;
+                }
+                //println!("closing PDA: {}", pda.pubkey);
+                pda.close(&chain).await;
+                tokio::time::sleep(Duration::from_secs(15)).await;
+                //println!("reopening PDA: {}", pda.pubkey);
+                pda.init(&chain, space).await;
+                tokio::time::sleep(Duration::from_secs(15)).await;
+            }
+            //println!("delegating PDA: {}", pda.pubkey);
+            pda.delegate(&chain).await;
         }
+        let mode = BenchModeInner::from(config.mode);
         Self {
             chain,
             ephem,
-            concurrency: config.concurrency.unwrap_or(usize::MAX),
-            pdas: pdas.into_iter().map(Into::into).collect(),
-            next: 0,
-            mode: mode.into(),
-            duration: config.duration,
+            mode,
             ws,
-            latency: Default::default(),
-            pending: Default::default(),
+            pdas,
+            duration: config.duration,
+            latency,
+            lag: Duration::from_micros(config.latency),
+            concurrency: Arc::new(Semaphore::new(config.concurrency.unwrap_or(65536))),
         }
     }
 
-    pub async fn run(mut self) {
-        let (mut iters, limit) = match self.duration {
-            BenchDuration::Time(d) => (u64::MAX, d),
-            BenchDuration::Iters(i) => (i, Duration::MAX),
+    pub async fn run(self) -> (Rc<RefCell<LatencyCollection>>, f64) {
+        let (duration, iters) = match self.duration {
+            BenchDuration::Time(d) => (d, u64::MAX),
+            BenchDuration::Iters(i) => (Duration::MAX, i),
         };
         let start = Instant::now();
-        let mut blockhash_refresher = interval(Duration::from_secs(45));
-        while iters > 0 && start.elapsed() < limit {
-            println!("I: {iters} -> {}", start.elapsed().as_secs_f64());
-            tokio::select! {
-                biased;
-                Some(Ok(stat)) = self.pending.next(), if !self.pending.is_empty() => {
-                    if stat.success {
-                        self.latency.delivery.confirm(&stat.id);
-                    } else {
-                        self.latency.record_error(&stat.id);
-                    }
-                }
-                msg = self.ws.next() => {
-                    match msg.ty {
-                        WsNotificationType::Result(rid) => {
-                            self.latency.confirmation.replace_id(rid, msg.id);
-                        }
-                        WsNotificationType::Signature => {
-                            self.latency.confirmation.confirm(&msg.id);
-                        }
-                        WsNotificationType::Account => {
-                            self.latency.update.confirm(&msg.id);
-                        }
-                    }
-                }
-                _ = blockhash_refresher.tick() => {
-                    tokio::task::spawn(self.chain.clone().refresh_blockhash());
-                    tokio::task::spawn(self.ephem.clone().refresh_blockhash());
-                }
-            }
-            if self.pending.len() == self.concurrency {
-                continue;
-            }
-            let pda = self.next();
+        let mut i = 0;
+        while start.elapsed() < duration && i < iters {
+            let pda = self.pdas[iters as usize % self.pdas.len()].clone();
+            let guard = self.concurrency.clone().acquire_owned().await.unwrap();
+            let client = self.ephem.clone();
+            let ws = self.ws.clone();
+            let latency = self.latency.clone();
             match self.mode {
-                BenchModeInner::RawSpeed => self.fill_space(iters as u8, iters, pda).await,
-                BenchModeInner::CloneSpeed {
-                    accounts,
-                    ref mut reader,
-                } => {
-                    let accounts = reader.next(accounts);
-                    self.compute_sum(accounts, iters, pda).await;
+                BenchModeInner::RawSpeed => {
+                    let task = pda.fill_space(client, ws, i, latency, guard, i);
+                    tokio::task::spawn_local(task);
+                }
+                BenchModeInner::CloneSpeed => {
+                    if i % 100 == 0 {
+                        pda.topup(1, self.chain.clone());
+                    }
+                    let task = pda.compute_sum(client, ws, latency, guard, i);
+                    tokio::task::spawn_local(task);
                 }
             }
-            iters -= 1;
+            i += 1;
+            tokio::time::sleep(self.lag).await;
         }
+        (
+            self.latency.clone(),
+            i as f64 / start.elapsed().as_secs_f64(),
+        )
     }
+}
 
-    fn next(&mut self) -> Rc<Pda> {
-        self.next = (self.next + 1) % self.pdas.len();
-        self.pdas[self.next].clone()
-    }
-
-    async fn transact(&mut self, ix: Instruction, pda: Rc<Pda>, metas: Vec<AccountMeta>, id: u64) {
-        let payer = &pda.payer;
-        let ix = SolanaInstruction::new_with_borsh(benchprog::ID, &ix, metas);
-
-        let mut txn = Transaction::new_with_payer(&[ix], Some(&payer.pubkey()));
-        let hash = *self.ephem.hash.borrow();
-
-        txn.sign(&[payer], hash);
-        let sig = txn.signatures[0];
-        self.ws.subscribe(WsSubscription::signature(sig, id)).await;
-        self.latency.confirmation.track(id);
-        self.latency.delivery.track(id);
-        self.latency.update.track(pda.sub);
-        let task = tokio::task::spawn_local(self.ephem.clone().send(txn, id));
-        self.pending.push(task);
-    }
-
-    async fn fill_space(&mut self, value: u8, id: u64, pda: Rc<Pda>) {
-        let ix = Instruction::FillSpace { value };
-        let metas = vec![AccountMeta::new(pda.pubkey, false)];
-        self.transact(ix, pda, metas, id).await;
-    }
-
-    async fn compute_sum(&mut self, accounts: Vec<Pubkey>, id: u64, pda: Rc<Pda>) {
-        let ix = Instruction::ComputeSum { index: 0 };
-        let mut metas = vec![AccountMeta::new(pda.pubkey, false)];
-        metas.extend(
-            accounts
-                .into_iter()
-                .map(|pk| AccountMeta::new_readonly(pk, false)),
-        );
-        self.transact(ix, pda, metas, id).await;
+impl Drop for BenchRunner {
+    fn drop(&mut self) {
+        self.ephem.shutdown();
+        self.chain.shutdown();
     }
 }

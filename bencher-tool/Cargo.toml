@@ -11,32 +11,22 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-tokio = { workspace = true }
-tokio-native-tls = "0.3"
-reqwest = { workspace = true }
-websocket = { package = "ratchet_rs", version = "1.2", features = [ "split" ] } # ws client
+tokio = { version = "1.0", features = [ "rt", "macros" ] }
 futures = "0.3"
 
 
-json = { package = "serde_json", version = "1.0" }
-bincode = "1.3.3"
-base64 = "0.22"
-borsh = "1.5.3"
 serde = { version = "1.0", features = [ "derive" ] }
 toml = "0.8"
 sysinfo = { version = "0.33", default-features = false, features = [ "disk", "network", "system" ] }
 
 duration = { package = "duration-str", version = "0.12", default-features = false, features = [ "serde" ] }
 
-bytes = "1.9"
-url = { version = "2.5", features = [ "serde" ] }
 
 solana = { package = "solana-sdk", version = "2.1.7" }
+rpc = { package = "solana-rpc-client", version = "2.1.7" }
+rpc-api = { package = "solana-rpc-client-api", version = "2.1.7" }
+pubsub = { package = "solana-pubsub-client", version = "2.1.7" }
 sdk = { package = "ephemeral-rollups-sdk", path = "../../ephemeral-rollups-sdk/rust/sdk" }
-# transaction = { package = "solana-transaction", version = "0.0.2", features = [ "serde" ] }
-# instruction = { package = "solana-instruction", version = "2.1.7", features = [ "serde" ] }
-# keypair = { package = "solana-keypair", version = "0.0.2" }
-# signer = { package = "solana-signer", version = "0.0.2" }
-# pubkey = { package = "solana-pubkey", version = "2.1.7" }
+
 
 benchprog = { package = "bencher-program", path = "../bencher-program" }

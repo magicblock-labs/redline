@@ -8,11 +8,16 @@ pub enum Instruction {
         space: u32,
         bump: u8,
     },
+    InitClonable {
+        space: u32,
+        seed: u8,
+        bump: u8,
+    },
     /// Delegate an account
     Delegate,
     /// Fill all the bytes in account data with given value
     FillSpace {
-        value: u8,
+        value: u64,
     },
     /// Compute the sum of length of data of all argument accounts and
     /// write them to the data offset (of writable PDA) given at index
