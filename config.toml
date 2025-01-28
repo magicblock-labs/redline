@@ -1,17 +1,16 @@
-sigverify = true
-# mode = { raw-speed = { space = 512, local = false } }
-mode = { clone-speed = { noise = 16 } }
-concurrency = 50
-latency = 100
-duration = { iters = 1000 }
-chain = "https://api.devnet.solana.com/"
+modes = [
+	{ raw-speed = { space = 512 } }, 
+	{ clone-speed = { noise = 2 } }, 
+	{ clone-speed = { noise = 8 } }, 
+	{ clone-speed = { noise = 16 } }, 
+]
+concurrency = [200, 400, 800]
+duration = { iters = 50000 }
+chain = "https://rpc.magicblock.app/devnet"
 ephem = "http://0.0.0.0:8899"
 # ephem = "http://0.0.0.0:7799"
 # ephem = "https://devnet.magicblock.app"
 ws = "ws://0.0.0.0:8900"
 # ws = "ws://0.0.0.0:7800"
 # ws = "wss://devnet.magicblock.app"
-keypairs = ["/users/babur/bencher.json"]
-subscriptions = true
-confirmations = true
-validator-mode = "ephemeral"
+keypairs = ["payer.json"]

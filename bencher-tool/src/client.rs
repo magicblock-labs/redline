@@ -18,7 +18,7 @@ impl Deref for SolanaClient {
 }
 
 impl SolanaClient {
-    pub fn new(url: String) -> Rc<Self> {
+    pub fn new(url: String, interval: u64) -> Rc<Self> {
         let inner = RpcClient::new(url);
         let hash = Cell::default();
         let shutdown = Default::default();
@@ -28,12 +28,12 @@ impl SolanaClient {
             shutdown,
         }
         .into();
-        tokio::task::spawn_local(this.clone().refresh_hash());
+        tokio::task::spawn_local(this.clone().refresh_hash(interval));
         this
     }
 
-    pub async fn refresh_hash(self: Rc<Self>) {
-        let mut ticker = tokio::time::interval(Duration::from_secs(15));
+    pub async fn refresh_hash(self: Rc<Self>, interval: u64) {
+        let mut ticker = tokio::time::interval(Duration::from_secs(interval));
         loop {
             tokio::select! {
                 _ = ticker.tick() => {

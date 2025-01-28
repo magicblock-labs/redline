@@ -53,7 +53,7 @@ impl Latency {
             .observations
             .iter()
             .map(|value| {
-                let diff = avg - value;
+                let diff = value - avg;
                 diff * diff
             })
             .sum::<f64>()
@@ -77,7 +77,6 @@ pub struct LatencyStats {
 
 pub struct LatencyCollection {
     pub delivery: LatencyTracker,
-    pub confirmation: LatencyTracker,
     pub update: LatencyTracker,
     pub failures: Latency,
     pub error_count: usize,
@@ -87,7 +86,6 @@ impl LatencyCollection {
     pub fn new(capacity: usize) -> Self {
         Self {
             delivery: LatencyTracker::new(capacity),
-            confirmation: LatencyTracker::new(capacity),
             update: LatencyTracker::new(capacity),
             failures: Latency::new(16),
             error_count: 0,
@@ -98,7 +96,6 @@ impl LatencyCollection {
         let Some(timer) = self.delivery.pending.remove(id) else {
             return;
         };
-        self.confirmation.pending.remove(id);
         self.update.pending.remove(id);
         self.failures.observe(timer.elapsed());
         self.error_count += 1;
@@ -109,7 +106,7 @@ impl fmt::Display for LatencyStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "LatencyStats\naverage: {:.4}, standard deviation: {:.4}, outliers: {}",
+            "average: {:.4}, standard deviation: {:.4}, outliers: {}",
             self.avg, self.sd, self.outliers
         )
     }
@@ -117,19 +114,33 @@ impl fmt::Display for LatencyStats {
 
 impl fmt::Display for LatencyCollection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "LatencyCollection\n\
-            Delivery: {}\n\
-            Confirmation: {}\n\
-            Update: {}\n\
-            Failures: {}\n\
-            Error Count: {}",
-            self.delivery.latency.compute(),
-            self.confirmation.latency.compute(),
-            self.update.latency.compute(),
-            self.failures.compute(),
-            self.error_count
+        writeln!(f, "Delivery: {}", self.delivery.latency.compute())?;
+        if !self.update.latency.observations.is_empty() {
+            writeln!(f, "Update: {}", self.update.latency.compute())?;
+        }
+        if self.error_count > 0 {
+            write!(
+                f,
+                "Failures: {}, Error Count: {}",
+                self.failures.compute(),
+                self.error_count
+            )
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl LatencyCollection {
+    pub fn as_abr_summary(&self) -> String {
+        format!(
+            "{:.1}/{}",
+            (self.delivery.latency.compute().avg * 1000.0) as u64,
+            if !self.update.latency.observations.is_empty() {
+                format!("{:.1}", (self.update.latency.compute().avg * 1000.0) as u64)
+            } else {
+                "NA".to_string()
+            }
         )
     }
 }

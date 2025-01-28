@@ -18,6 +18,7 @@ futures = "0.3"
 serde = { version = "1.0", features = [ "derive" ] }
 toml = "0.8"
 sysinfo = { version = "0.33", default-features = false, features = [ "disk", "network", "system" ] }
+prettytable-rs = "0.10"
 
 duration = { package = "duration-str", version = "0.12", default-features = false, features = [ "serde" ] }
 

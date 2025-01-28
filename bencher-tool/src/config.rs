@@ -7,31 +7,97 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-    pub mode: BenchMode,
-    pub concurrency: Option<usize>,
-    pub latency: u64,
-    pub duration: BenchDuration,
+    pub modes: Vec<BenchMode>,
+    pub concurrency: Vec<usize>,
     pub chain: String,
     pub ephem: String,
+    pub duration: BenchDuration,
     pub ws: String,
     pub keypairs: Vec<PathBuf>,
-    pub subscriptions: bool,
-    pub confirmations: bool,
-    pub sigverify: bool,
-    pub validator_mode: String,
 }
 
-#[derive(Deserialize)]
+pub struct ConfigPermutator {
+    config: Config,
+    mode: usize,
+    concurrency: usize,
+    subscriptions: usize,
+    preflight_check: usize,
+    inter_txn_lag: usize,
+}
+
+pub struct ConfigPermuation {
+    pub chain: String,
+    pub ephem: String,
+    pub duration: BenchDuration,
+    pub ws: String,
+    pub keypairs: Vec<PathBuf>,
+
+    pub mode: BenchMode,
+    pub concurrency: usize,
+    pub subscriptions: bool,
+    pub preflight_check: bool,
+    pub inter_txn_lag: bool,
+}
+
+impl ConfigPermutator {
+    pub fn new(config: Config) -> Self {
+        Self {
+            config,
+            mode: 0,
+            concurrency: 0,
+            subscriptions: 0,
+            preflight_check: 0,
+            inter_txn_lag: 0,
+        }
+    }
+
+    pub fn permutate(&mut self) -> Option<ConfigPermuation> {
+        (self.concurrency < self.config.concurrency.len()).then_some(())?;
+        let permutation = ConfigPermuation {
+            chain: self.config.chain.clone(),
+            ephem: self.config.ephem.clone(),
+            duration: self.config.duration.clone(),
+            ws: self.config.ws.clone(),
+            keypairs: self.config.keypairs.clone(),
+
+            mode: self.config.modes[self.mode].clone(),
+            concurrency: self.config.concurrency[self.concurrency],
+            subscriptions: (self.subscriptions == 1),
+            preflight_check: (self.preflight_check == 1),
+            inter_txn_lag: (self.inter_txn_lag == 1),
+        };
+        self.inter_txn_lag += 1;
+        if self.inter_txn_lag == 2 {
+            self.inter_txn_lag = 0;
+            self.preflight_check += 1;
+        }
+        if self.preflight_check == 2 {
+            self.preflight_check = 0;
+            self.subscriptions += 1;
+        }
+        if self.subscriptions == 2 {
+            self.subscriptions = 0;
+            self.mode += 1;
+        }
+        if self.mode == self.config.modes.len() {
+            self.mode = 0;
+            self.concurrency += 1;
+        }
+        Some(permutation)
+    }
+}
+
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum BenchDuration {
     Time(#[serde(deserialize_with = "duration::deserialize_duration")] Duration),
     Iters(u64),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum BenchMode {
-    RawSpeed { space: u32, local: bool },
+    RawSpeed { space: u32 },
     CloneSpeed { noise: u8 },
 }
 
@@ -53,23 +119,6 @@ impl BenchDuration {
     }
 }
 
-impl fmt::Display for Config {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "mode: {}\nconcurrency: {}, inter transaction lag (ms): {}\nduration: {}\nsubscription to updates: {}, signature confirmations: {}\nsigverify: {}, validator mode: {}",
-            self.mode,
-            self.concurrency.unwrap_or(usize::MAX),
-            self.latency,
-            self.duration,
-            self.subscriptions,
-            self.confirmations,
-            self.sigverify,
-            self.validator_mode
-        )
-    }
-}
-
 impl fmt::Display for BenchDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -84,10 +133,37 @@ impl fmt::Display for BenchDuration {
 impl fmt::Display for BenchMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            BenchMode::RawSpeed { space, local } => {
-                write!(f, "raw speed - space: {}, local: {}", space, local)
+            BenchMode::RawSpeed { space } => {
+                write!(f, "raw speed - space: {}", space)
             }
             BenchMode::CloneSpeed { noise } => write!(f, "with cloning - noise factor: {}", noise),
         }
+    }
+}
+
+impl fmt::Display for ConfigPermuation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "MODE: {}", self.mode)?;
+        writeln!(f, "DURATION: {}", self.duration)?;
+        writeln!(
+            f,
+            "CONCURRENCY: {}, ACC SUBSCRIPTIONS: {}",
+            self.concurrency, self.subscriptions
+        )?;
+        write!(
+            f,
+            "PREFLIGHT CHECK: {}, INTER TXN LAG: {}",
+            self.preflight_check, self.inter_txn_lag
+        )
+    }
+}
+
+impl ConfigPermuation {
+    pub fn as_abr_str(&self) -> String {
+        let mode = match self.mode {
+            BenchMode::RawSpeed { space } => format!("RS-{space}"),
+            BenchMode::CloneSpeed { noise } => format!("CS-{noise}"),
+        };
+        mode + &format!("/CC-{}", self.concurrency)
     }
 }
