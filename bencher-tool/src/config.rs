@@ -20,7 +20,6 @@ pub struct ConfigPermutator {
     config: Config,
     mode: usize,
     concurrency: usize,
-    subscriptions: usize,
     preflight_check: usize,
     inter_txn_lag: usize,
 }
@@ -34,7 +33,6 @@ pub struct ConfigPermuation {
 
     pub mode: BenchMode,
     pub concurrency: usize,
-    pub subscriptions: bool,
     pub preflight_check: bool,
     pub inter_txn_lag: bool,
 }
@@ -45,7 +43,6 @@ impl ConfigPermutator {
             config,
             mode: 0,
             concurrency: 0,
-            subscriptions: 0,
             preflight_check: 0,
             inter_txn_lag: 0,
         }
@@ -62,7 +59,6 @@ impl ConfigPermutator {
 
             mode: self.config.modes[self.mode].clone(),
             concurrency: self.config.concurrency[self.concurrency],
-            subscriptions: (self.subscriptions == 1),
             preflight_check: (self.preflight_check == 1),
             inter_txn_lag: (self.inter_txn_lag == 1),
         };
@@ -73,10 +69,6 @@ impl ConfigPermutator {
         }
         if self.preflight_check == 2 {
             self.preflight_check = 0;
-            self.subscriptions += 1;
-        }
-        if self.subscriptions == 2 {
-            self.subscriptions = 0;
             self.mode += 1;
         }
         if self.mode == self.config.modes.len() {
@@ -145,11 +137,7 @@ impl fmt::Display for ConfigPermuation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "MODE: {}", self.mode)?;
         writeln!(f, "DURATION: {}", self.duration)?;
-        writeln!(
-            f,
-            "CONCURRENCY: {}, ACC SUBSCRIPTIONS: {}",
-            self.concurrency, self.subscriptions
-        )?;
+        writeln!(f, "CONCURRENCY: {}", self.concurrency)?;
         write!(
             f,
             "PREFLIGHT CHECK: {}, INTER TXN LAG: {}",

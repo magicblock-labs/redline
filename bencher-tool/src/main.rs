@@ -12,17 +12,7 @@ fn main() {
     let config: Config = toml::from_str(&config).expect("invalid config file");
     let mut permutator = ConfigPermutator::new(config);
     let mut local = LocalSet::new();
-    let mut row = prettytable::row![
-        "mode/concurrency",
-        "fff",
-        "fft",
-        "ftf",
-        "ftt",
-        "tff",
-        "tft",
-        "ttf",
-        "ttt"
-    ];
+    let mut row = prettytable::row!["mode/concurrency", "ff", "ft", "tf", "tt",];
     let mut table = Table::new();
     let mut last_mode = String::new();
     while let Some(config) = permutator.permutate() {

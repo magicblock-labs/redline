@@ -53,8 +53,7 @@ impl BenchRunner {
         let space = config.mode.space();
         for path in config.keypairs {
             let payer = read_keypair_file(path).expect("failed to read keypair file");
-            let mut pda =
-                Pda::new(&chain, payer, config.subscriptions, !config.preflight_check).await;
+            let mut pda = Pda::new(&chain, payer, !config.preflight_check).await;
             if let BenchMode::CloneSpeed { noise } = config.mode {
                 pda.generate_clones(&chain, noise).await;
             }
@@ -69,14 +68,12 @@ impl BenchRunner {
                 .await
                 .map(|a| (a.lamports, a.owner, a.data().len() as u32))
                 .unwrap_or_default();
-            if config.subscriptions {
-                pda.subscribe(ws.clone(), latency.clone(), offset as u64);
-            }
+            pda.subscribe(ws.clone(), latency.clone(), offset as u64);
             if lamports == 0 {
                 let _ = ephem
                     .request_airdrop(&pda.payer.pubkey(), LAMPORTS_PER_SOL)
                     .await;
-                pda.init(&ephem, space).await;
+                //pda.init(&ephem, space).await;
                 continue;
             }
 
@@ -86,20 +83,20 @@ impl BenchRunner {
                 continue;
             }
             if size != space {
-                //if owner == DELEGATION_PROGRAM_ID {
-                //    //println!("undelegating PDA: {}", pda.pubkey);
-                //    pda.undelegate(&ephem).await;
-                //    tokio::time::sleep(Duration::from_secs(15)).await;
-                //}
-                //println!("closing PDA: {}", pda.pubkey);
-                pda.close(&ephem).await;
+                if owner == DELEGATION_PROGRAM_ID {
+                    //println!("undelegating PDA: {}", pda.pubkey);
+                    pda.undelegate(&chain).await;
+                    tokio::time::sleep(Duration::from_secs(15)).await;
+                }
+                println!("closing PDA: {}", pda.pubkey);
+                pda.close(&chain).await;
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 //println!("reopening PDA: {}", pda.pubkey);
-                pda.init(&ephem, space).await;
+                pda.init(&chain, space).await;
                 tokio::time::sleep(Duration::from_secs(15)).await;
             }
-            //println!("delegating PDA: {}", pda.pubkey);
-            //pda.delegate(&chain).await;
+            println!("delegating PDA: {}", pda.pubkey);
+            pda.delegate(&chain).await;
         }
         let mode = BenchModeInner::from(config.mode);
         Self {

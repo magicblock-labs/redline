@@ -32,7 +32,6 @@ pub struct Pda {
     pub bump: u8,
     clones: Option<CloneablePdas>,
     pub shutdown: Rc<Notify>,
-    pub subscriptions: bool,
     pub skip_preflight: bool,
 }
 
@@ -53,12 +52,7 @@ impl CloneablePdas {
 }
 
 impl Pda {
-    pub async fn new(
-        client: &SolanaClient,
-        payer: Keypair,
-        subscriptions: bool,
-        skip_preflight: bool,
-    ) -> Self {
+    pub async fn new(client: &SolanaClient, payer: Keypair, skip_preflight: bool) -> Self {
         let pubkey = payer.pubkey();
         if client
             .get_account(&pubkey)
@@ -77,7 +71,6 @@ impl Pda {
             bump,
             clones: None,
             shutdown: Default::default(),
-            subscriptions,
             skip_preflight,
         }
     }
@@ -291,9 +284,7 @@ impl Pda {
         let mut txn = Transaction::new_with_payer(&[ix], Some(&pk));
 
         txn.sign(&[&self.payer], client.hash());
-        if self.subscriptions {
-            latency.borrow_mut().update.track(id);
-        }
+        latency.borrow_mut().update.track(id);
         latency.borrow_mut().delivery.track(id);
         let result = client
             .send_transaction_with_config(

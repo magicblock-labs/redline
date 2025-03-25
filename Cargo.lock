@@ -325,7 +325,7 @@ version = "0.2.1"
 dependencies = [
  "bencher-program",
  "duration-str",
- "ephemeral-rollups-sdk 0.2.1",
+ "ephemeral-rollups-sdk 0.2.3",
  "futures",
  "prettytable-rs",
  "serde",
@@ -343,7 +343,7 @@ name = "bencher-program"
 version = "0.2.1"
 dependencies = [
  "borsh 1.5.3",
- "ephemeral-rollups-sdk 0.2.1 (git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade)",
+ "ephemeral-rollups-sdk 0.2.1",
  "solana-program",
 ]
 
@@ -1015,6 +1015,7 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk"
 version = "0.2.1"
+source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade#1a6052152dd020839093fbbcefb89cd6a1151962"
 dependencies = [
  "borsh 1.5.3",
  "ephemeral-rollups-sdk-attribute-commit 0.2.1",
@@ -1026,13 +1027,12 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.2.1"
-source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade#1a6052152dd020839093fbbcefb89cd6a1151962"
+version = "0.2.3"
 dependencies = [
- "borsh 1.5.3",
- "ephemeral-rollups-sdk-attribute-commit 0.2.1 (git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade)",
- "ephemeral-rollups-sdk-attribute-delegate 0.2.1 (git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade)",
- "ephemeral-rollups-sdk-attribute-ephemeral 0.2.1 (git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade)",
+ "borsh 0.10.4",
+ "ephemeral-rollups-sdk-attribute-commit 0.2.3",
+ "ephemeral-rollups-sdk-attribute-delegate 0.2.3",
+ "ephemeral-rollups-sdk-attribute-ephemeral 0.2.3",
  "paste",
  "solana-program",
 ]
@@ -1040,6 +1040,7 @@ dependencies = [
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
 version = "0.2.1"
+source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade#1a6052152dd020839093fbbcefb89cd6a1151962"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1048,17 +1049,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.2.1"
-source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade#1a6052152dd020839093fbbcefb89cd6a1151962"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1076,8 +1067,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.2.1"
+name = "ephemeral-rollups-sdk-attribute-delegate"
+version = "0.2.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1088,6 +1079,15 @@ dependencies = [
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
 version = "0.2.1"
 source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade#1a6052152dd020839093fbbcefb89cd6a1151962"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ephemeral-rollups-sdk-attribute-ephemeral"
+version = "0.2.3"
 dependencies = [
  "proc-macro2",
  "quote",

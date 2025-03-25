@@ -1,16 +1,16 @@
 modes = [
-	{ raw-speed = { space = 512 } }, 
+	{ raw-speed = { space = 128 } }, 
 	{ clone-speed = { noise = 2 } }, 
 	{ clone-speed = { noise = 8 } }, 
 	{ clone-speed = { noise = 16 } }, 
 ]
 concurrency = [200, 400, 800]
-duration = { iters = 50000 }
+duration = { iters = 5000 }
 chain = "https://rpc.magicblock.app/devnet"
-ephem = "http://0.0.0.0:8899"
-# ephem = "http://0.0.0.0:7799"
+# ephem = "http://0.0.0.0:8899"
+ephem = "http://0.0.0.0:7799"
 # ephem = "https://devnet.magicblock.app"
-ws = "ws://0.0.0.0:8900"
-# ws = "ws://0.0.0.0:7800"
+# ws = "ws://0.0.0.0:8900"
+ws = "ws://0.0.0.0:7800"
 # ws = "wss://devnet.magicblock.app"
 keypairs = ["payer.json"]
