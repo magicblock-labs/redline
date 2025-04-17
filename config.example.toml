@@ -1,0 +1,63 @@
+# Example configuration file for Redline application
+
+[connection]
+# Connection settings for blockchain and ephemeral URLs
+# URL of the chain node to connect to
+chain-url = "http://api.devnet.solana.com"
+# URL of the ephemeral node to connect to
+ephem-url = "http://127.0.0.1:8899"
+# Type of HTTP connection: "http1" or "http2"
+http-connection-type = "http1"
+# Maximum number of HTTP connections
+http-connections-count = 10
+# Maximum number of WebSocket connections
+ws-connections-count = 5
+
+[benchmark]
+# Benchmark settings
+# Number of iterations for the benchmark
+iterations = 15000
+# Transactions per second to target
+tps = 100
+# Number of concurrent executions
+concurrency = 16
+# Perform a preflight check for each transaction: true or false
+preflight-check = true
+# Path to the keypair files
+# 
+# NOTE: each provided keypair will start its own thread of execution for
+# benchmark, dramatically increasing the load on target validator. I.e. each
+# keypair will run its own benchmark in parallel with others, so for example
+# providing 10 keypairs has 10x load in comparison to a single keypair
+keypairs = ["keypairs/1.json"]
+
+# Mode of benchmark, options:
+mode = "simple-byte-set"
+
+# Alternative modes are:
+
+# mode = { "trigger-clones" = { clone-frequency-secs = 60, accounts-count = 10 } }
+# mode = { "high-cu-cost" = { iters = 500 } }
+# mode = { "read-write" = { accounts-pool-size = 5 } }
+# mode = { "mixed" = [ { "simple-byte-set" }, { "high-cu-cost" = { iters = 250 } } ] }
+
+[subscription]
+# Subscription settings
+# Whether to subscribe to account notifications: true or false
+subscribe-to-accounts = true
+# Whether to subscribe to signature notifications: true or false
+subscribe-to-signatures = true
+# Enforce total synchronization: true or false
+# this ensures that a transaction is considered completed only if account
+# update and signature update has been received, while preventing other
+# transactions from running, thus significantly decreasinng throughput.
+# If disabled, transaction will reserve concurrency slot only for as long as
+# it's required to receive HTTP response
+enforce-total-sync = false
+
+[data]
+# Data settings for account encoding and size
+# Encoding type of the account data: "base58", "base64", "base64+zstd"
+account-encoding = "base64+zstd"
+# Size of the account data: bytes128, bytes512, bytes2048, bytes8192
+account-size = "bytes128"

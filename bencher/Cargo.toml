@@ -1,0 +1,37 @@
+[package]
+name = "redline-bencher"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+documentation = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+readme = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+tokio = { version = "1.0", features = [ "rt", "macros" ] }
+hyper = { version = "1.0", features = [ "client", "http2" ] }
+hyper-util = { version = "0.1", features = [ "tokio" ] }
+http-body-util = "0.1"
+fastwebsockets = { version = "0.10", features = [ "upgrade", "unstable-split" ] }
+
+transaction = { package = "solana-transaction", version = "2", features = [ "bincode" ] }
+pubkey = { package = "solana-pubkey", version = "2" }
+keypair = { package = "solana-keypair", version = "2" }
+signer = { package = "solana-signer", version = "2" }
+hash = { package = "solana-hash", version = "2" }
+instruction = { package = "solana-instruction", version = "2" }
+
+program = { path = "../program", package = "redline-program" }
+
+json = { package = "sonic-rs", version = "0.5" }
+serde = { workspace = true }
+bincode = { workspace = true }
+toml = "0.8"
+bs58 = "0.5"
+base64 = "0.22"
+zstd = "0.13"
+
+rand = "0.8"
