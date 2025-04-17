@@ -48,7 +48,7 @@ iterations = 15000
 tps = 100
 concurrency = 16
 preflight-check = true
-keypairs = ["keypairs/1.json"]
+parallelism = 4
 mode = "simple-byte-set"
 
 [subscription]

@@ -17,7 +17,7 @@ hyper-util = { version = "0.1", features = [ "tokio" ] }
 http-body-util = "0.1"
 fastwebsockets = { version = "0.10", features = [ "upgrade", "unstable-split" ] }
 
-transaction = { package = "solana-transaction", version = "2", features = [ "bincode" ] }
+transaction = { workspace = true }
 pubkey = { workspace = true }
 keypair = { workspace = true }
 signer = { workspace = true }
