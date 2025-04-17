@@ -32,7 +32,7 @@ impl LatencyTracker {
 }
 
 pub struct Latency {
-    pub observations: Vec<f64>, // moving average
+    pub observations: Vec<f64>,
 }
 
 impl Latency {
@@ -78,6 +78,7 @@ pub struct LatencyStats {
 pub struct LatencyCollection {
     pub delivery: LatencyTracker,
     pub update: LatencyTracker,
+    pub confirmation: LatencyTracker,
     pub failures: Latency,
     pub error_count: usize,
 }
@@ -87,6 +88,7 @@ impl LatencyCollection {
         Self {
             delivery: LatencyTracker::new(capacity),
             update: LatencyTracker::new(capacity),
+            confirmation: LatencyTracker::new(capacity),
             failures: Latency::new(16),
             error_count: 0,
         }
@@ -134,13 +136,14 @@ impl fmt::Display for LatencyCollection {
 impl LatencyCollection {
     pub fn as_abr_summary(&self) -> String {
         format!(
-            "{:.1}/{}",
+            "{:.1}/{}/{}",
             (self.delivery.latency.compute().avg * 1000.0) as u64,
             if !self.update.latency.observations.is_empty() {
                 format!("{:.1}", (self.update.latency.compute().avg * 1000.0) as u64)
             } else {
                 "NA".to_string()
-            }
+            },
+            (self.confirmation.latency.compute().avg * 1000.0) as u64,
         )
     }
 }

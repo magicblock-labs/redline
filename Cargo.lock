@@ -325,7 +325,7 @@ version = "0.2.1"
 dependencies = [
  "bencher-program",
  "duration-str",
- "ephemeral-rollups-sdk 0.2.3",
+ "ephemeral-rollups-sdk 0.2.4",
  "futures",
  "prettytable-rs",
  "serde",
@@ -342,7 +342,7 @@ dependencies = [
 name = "bencher-program"
 version = "0.2.1"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "ephemeral-rollups-sdk 0.2.1",
  "solana-program",
 ]
@@ -415,11 +415,11 @@ dependencies = [
 
 [[package]]
 name = "borsh"
-version = "1.5.3"
+version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2506947f73ad44e344215ccd6403ac2ae18cd8e046e581a441bf8d199f257f03"
+checksum = "ad8646f98db542e39fc66e68a20b2144f6a732636df7c2354e74645faaa433ce"
 dependencies = [
- "borsh-derive 1.5.3",
+ "borsh-derive 1.5.7",
  "cfg_aliases",
 ]
 
@@ -438,9 +438,9 @@ dependencies = [
 
 [[package]]
 name = "borsh-derive"
-version = "1.5.3"
+version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2593a3b8b938bd68373196c9832f516be11fa487ef4ae745eb282e6a56a7244"
+checksum = "fdd1d3c0c2f5833f22386f252fe8ed005c7f59fdcddeef025c01b4c3b9fd9ac3"
 dependencies = [
  "once_cell",
  "proc-macro-crate 3.2.0",
@@ -1017,7 +1017,7 @@ name = "ephemeral-rollups-sdk"
 version = "0.2.1"
 source = "git+https://github.com/magicblock-labs/ephemeral-rollups-sdk.git?branch=solana-upgrade#1a6052152dd020839093fbbcefb89cd6a1151962"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "ephemeral-rollups-sdk-attribute-commit 0.2.1",
  "ephemeral-rollups-sdk-attribute-delegate 0.2.1",
  "ephemeral-rollups-sdk-attribute-ephemeral 0.2.1",
@@ -1027,12 +1027,12 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "borsh 0.10.4",
- "ephemeral-rollups-sdk-attribute-commit 0.2.3",
- "ephemeral-rollups-sdk-attribute-delegate 0.2.3",
- "ephemeral-rollups-sdk-attribute-ephemeral 0.2.3",
+ "ephemeral-rollups-sdk-attribute-commit 0.2.4",
+ "ephemeral-rollups-sdk-attribute-delegate 0.2.4",
+ "ephemeral-rollups-sdk-attribute-ephemeral 0.2.4",
  "paste",
  "solana-program",
 ]
@@ -1049,7 +1049,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-commit"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1068,7 +1068,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-delegate"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "ephemeral-rollups-sdk-attribute-ephemeral"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2840,7 +2840,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "055c45b7aae61c8c7b26a537f7a8387cc8a10036081ddfd7170a7a9b4d924ffd"
 dependencies = [
  "borsh 0.10.4",
- "borsh 1.5.3",
+ "borsh 1.5.7",
 ]
 
 [[package]]
@@ -2976,7 +2976,7 @@ version = "2.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7067f2bd1e9c3f28153484f03e44bf8dc73cededa6bc132e40de9bfc667b8534"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "bs58",
  "bytemuck",
  "bytemuck_derive",
@@ -3015,7 +3015,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dbf607aff88e4f17079a33d34517b7f379d752dfa0496a94cea798a91e6f6ee"
 dependencies = [
  "bincode",
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "getrandom 0.2.15",
  "js-sys",
  "num-traits",
@@ -3118,7 +3118,7 @@ dependencies = [
  "bitflags 2.6.0",
  "blake3",
  "borsh 0.10.4",
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "bs58",
  "bv",
  "bytemuck",
@@ -3198,7 +3198,7 @@ version = "2.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bd557d10df4380234f5b4a5971a0cae29eedcc42ebe4bbe926a21ff31912e99"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "num-traits",
  "serde",
  "serde_derive",
@@ -3270,7 +3270,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c46701a845b731f2ffcf002c4bb08968434b9cf5e576cdd705259421074d1764"
 dependencies = [
  "borsh 0.10.4",
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "bs58",
  "bytemuck",
  "bytemuck_derive",
@@ -3392,7 +3392,7 @@ checksum = "70bf67076763533f4b43210ad2b966672b8d8b1c837f69987bb780e6c4e6d549"
 dependencies = [
  "bincode",
  "bitflags 2.6.0",
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "bs58",
  "bytemuck",
  "bytemuck_derive",
@@ -3466,7 +3466,7 @@ version = "2.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ece1b12237c7755a2070ab1d309a236b506041dd1d7927c7053b04cd3203728"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "libsecp256k1",
  "solana-define-syscall",
  "thiserror 1.0.69",
@@ -3795,7 +3795,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c704c88fc457fa649ba3aabe195c79d885c3f26709efaddc453c8de352c90b87"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "bytemuck",
  "bytemuck_derive",
  "solana-program",
@@ -3900,7 +3900,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6c2318ddff97e006ed9b1291ebec0750a78547f870f62a69c56fe3b46a5d8fc"
 dependencies = [
- "borsh 1.5.3",
+ "borsh 1.5.7",
  "solana-program",
  "spl-discriminator",
  "spl-pod",

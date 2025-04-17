@@ -15,7 +15,7 @@ fn main() {
     let mut row = prettytable::row!["mode/concurrency", "ff", "ft", "tf", "tt",];
     let mut table = Table::new();
     let mut last_mode = String::new();
-    while let Some(config) = permutator.permutate() {
+    if let Some(config) = permutator.permutate() {
         let mode = config.as_abr_str();
         if last_mode != mode {
             table.add_row(std::mem::take(&mut row));

@@ -39,6 +39,7 @@ pub struct BenchRunner {
     latency: Rc<RefCell<LatencyCollection>>,
     concurrency: Arc<Semaphore>,
     inter_txn_lag: bool,
+    ws: Rc<PubsubClient>,
 }
 
 impl BenchRunner {
@@ -68,7 +69,12 @@ impl BenchRunner {
                 .await
                 .map(|a| (a.lamports, a.owner, a.data().len() as u32))
                 .unwrap_or_default();
-            pda.subscribe(ws.clone(), latency.clone(), offset as u64);
+            pda.subscribe(
+                ws.clone(),
+                latency.clone(),
+                offset as u64,
+                config.duration.iters() as u64 - 1,
+            );
             if lamports == 0 {
                 let _ = ephem
                     .request_airdrop(&pda.payer.pubkey(), LAMPORTS_PER_SOL)
@@ -96,12 +102,13 @@ impl BenchRunner {
                 tokio::time::sleep(Duration::from_secs(15)).await;
             }
             println!("delegating PDA: {}", pda.pubkey);
-            pda.delegate(&chain).await;
+            //pda.delegate(&chain).await;
         }
         let mode = BenchModeInner::from(config.mode);
         Self {
             chain,
             ephem,
+            ws,
             mode,
             pdas,
             duration: config.duration,
@@ -116,26 +123,27 @@ impl BenchRunner {
             BenchDuration::Time(d) => (d, u64::MAX),
             BenchDuration::Iters(i) => (Duration::MAX, i),
         };
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let start = Instant::now();
         let mut i = 0;
         while start.elapsed() < duration && i < iters {
             let pda = self.pdas[iters as usize % self.pdas.len()].clone();
-            if self.inter_txn_lag && self.concurrency.available_permits() % 10 == 0 {
-                tokio::time::sleep(Duration::from_millis(1)).await;
-            }
+            //if self.inter_txn_lag && self.concurrency.available_permits() % 10 == 0 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            //}
             let guard = self.concurrency.clone().acquire_owned().await.unwrap();
             let client = self.ephem.clone();
             let latency = self.latency.clone();
             match self.mode {
                 BenchModeInner::RawSpeed => {
-                    let task = pda.fill_space(client, i, latency, guard, i);
+                    let task = pda.fill_space(client, self.ws.clone(), i, latency, guard, i);
                     tokio::task::spawn_local(task);
                 }
                 BenchModeInner::CloneSpeed => {
                     if i % 100 == 0 {
                         pda.topup(1, self.chain.clone());
                     }
-                    let task = pda.compute_sum(client, latency, guard, i);
+                    let task = pda.compute_sum(client, self.ws.clone(), latency, guard, i);
                     tokio::task::spawn_local(task);
                 }
             }

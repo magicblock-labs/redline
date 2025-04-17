@@ -2,15 +2,13 @@ use std::{
     cell::RefCell,
     rc::Rc,
     sync::{atomic::AtomicUsize, Arc},
+    time::Duration,
 };
 
 use benchprog::{instruction::Instruction, SEEDS};
 use futures::StreamExt;
 use pubsub::nonblocking::pubsub_client::PubsubClient;
-use sdk::{
-    consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID},
-    delegate_args::{DelegateAccountMetas, DelegateAccounts},
-};
+use sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
 use solana::{
     account::ReadableAccount,
     instruction::{AccountMeta, Instruction as SolanaInstruction},
@@ -80,23 +78,29 @@ impl Pda {
         ws: Rc<PubsubClient>,
         latency: Rc<RefCell<LatencyCollection>>,
         offset: u64,
+        until: u64,
     ) {
         let mut id = offset;
         let pubkey = self.pubkey;
         let shutdown = self.shutdown.clone();
         let task = async move {
-            let (mut s, _) = ws
+            let (mut s, unsub) = ws
                 .account_subscribe(&pubkey, None)
                 .await
                 .expect("failed to subscribe to PDA");
+            println!("subscribed to {pubkey}");
             loop {
                 tokio::select! {
                     Some(_) = s.next() => {
                         latency.borrow_mut().update.confirm(&id);
                     }
-                    _ = shutdown.notified() => {
-                        break;
-                    }
+                    //_ = shutdown.notified() => {
+                    //    unsub().await;
+                    //    break;
+                    //}
+                }
+                if id >= until {
+                    break;
                 }
                 id += offset + 1;
             }
@@ -142,20 +146,19 @@ impl Pda {
         //println!("closed account: {r:?}");
     }
 
-    #[allow(unused)]
-    pub async fn delegate(&self, client: &SolanaClient) {
-        let pk = self.payer.pubkey();
-        let accounts = DelegateAccounts::new(self.pubkey, benchprog::ID);
-        let metas = DelegateAccountMetas::from(accounts).into_vec(pk);
-        let ix = Instruction::Delegate;
-        let ix = SolanaInstruction::new_with_borsh(benchprog::ID, &ix, metas);
-        let mut txn = Transaction::new_with_payer(&[ix], Some(&pk));
-
-        txn.sign(&[&self.payer], client.hash());
-        client.send_and_confirm_transaction(&txn).await.unwrap();
-        //println!("delegated account: {r:?}");
-    }
-
+    //#[allow(unused)]
+    //pub async fn delegate(&self, client: &SolanaClient) {
+    //    let pk = self.payer.pubkey();
+    //    let accounts = DelegateAccounts::new(self.pubkey, benchprog::ID);
+    //    let metas = DelegateAccountMetas::from(accounts).into_vec(pk);
+    //    let ix = Instruction::Delegate;
+    //    let ix = SolanaInstruction::new_with_borsh(benchprog::ID, &ix, metas);
+    //    let mut txn = Transaction::new_with_payer(&[ix], Some(&pk));
+    //
+    //    txn.sign(&[&self.payer], client.hash());
+    //    client.send_and_confirm_transaction(&txn).await.unwrap();
+    //    //println!("delegated account: {r:?}");
+    //}
     #[allow(unused)]
     pub async fn undelegate(&self, client: &SolanaClient) {
         let pk = self.payer.pubkey();
@@ -176,6 +179,7 @@ impl Pda {
     pub async fn fill_space(
         self: Rc<Self>,
         client: Rc<SolanaClient>,
+        ws: Rc<PubsubClient>,
         value: u64,
         latency: Rc<RefCell<LatencyCollection>>,
         _guard: OwnedSemaphorePermit,
@@ -183,12 +187,14 @@ impl Pda {
     ) {
         let metas = vec![AccountMeta::new(self.pubkey, false)];
         let ix = Instruction::FillSpace { value };
-        self.send_transaction(ix, metas, latency, &client, id).await;
+        self.send_transaction(ix, metas, latency, &client, ws, id)
+            .await;
     }
 
     pub async fn compute_sum(
         self: Rc<Self>,
         client: Rc<SolanaClient>,
+        ws: Rc<PubsubClient>,
         latency: Rc<RefCell<LatencyCollection>>,
         _guard: OwnedSemaphorePermit,
         id: u64,
@@ -203,7 +209,8 @@ impl Pda {
                 .map(|&a| AccountMeta::new_readonly(a, false)),
         );
         let ix = Instruction::ComputeSum { index: id as u32 };
-        self.send_transaction(ix, metas, latency, &client, id).await;
+        self.send_transaction(ix, metas, latency, &client, ws, id)
+            .await;
     }
 
     pub async fn generate_clones(&mut self, client: &SolanaClient, noise: u8) {
@@ -277,6 +284,7 @@ impl Pda {
         metas: Vec<AccountMeta>,
         latency: Rc<RefCell<LatencyCollection>>,
         client: &SolanaClient,
+        ws: Rc<PubsubClient>,
         id: u64,
     ) {
         let pk = self.payer.pubkey();
@@ -284,8 +292,17 @@ impl Pda {
         let mut txn = Transaction::new_with_payer(&[ix], Some(&pk));
 
         txn.sign(&[&self.payer], client.hash());
+        let signature = txn.signatures[0];
+        let l = latency.clone();
+        tokio::task::spawn_local(async move {
+            let mut r = ws.signature_subscribe(&signature, None).await.unwrap();
+            let _ = tokio::time::timeout(Duration::from_secs(3), r.0.next()).await;
+            l.borrow_mut().confirmation.confirm(&id);
+        });
+
         latency.borrow_mut().update.track(id);
         latency.borrow_mut().delivery.track(id);
+        latency.borrow_mut().confirmation.track(id);
         let result = client
             .send_transaction_with_config(
                 &txn,

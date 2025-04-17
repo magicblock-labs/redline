@@ -1,4 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::pubkey::Pubkey;
 
 /// Instructions to simulate some activity
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -15,14 +16,17 @@ pub enum Instruction {
     },
     /// Delegate an account
     Delegate,
-    /// Fill all the bytes in account data with given value
-    FillSpace {
+    /// Fill all the bytes in the account data with the given value
+    SimpleByteSet {
         value: u64,
+    },
+    ExpensiveHashCompute {
+        init: Pubkey,
     },
     /// Compute the sum of length of data of all argument accounts and
     /// write them to the data offset (of writable PDA) given at index
     /// this should trigger cloning of all the readonly provided accounts
-    ComputeSum {
+    MultiAccountRead {
         index: u32,
     },
     CommitUndelegate,
