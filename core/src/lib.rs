@@ -74,6 +74,7 @@ pub struct DataSettings {
 #[serde(rename_all = "kebab-case")]
 pub enum BenchMode {
     SimpleByteSet,
+    #[serde(rename_all = "kebab-case")]
     TriggerClones {
         clone_frequency_secs: u64,
         accounts_count: u8,
@@ -81,6 +82,7 @@ pub enum BenchMode {
     HighCuCost {
         iters: u32,
     },
+    #[serde(rename_all = "kebab-case")]
     ReadWrite {
         accounts_count: u8,
     },

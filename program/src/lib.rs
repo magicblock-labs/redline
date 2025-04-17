@@ -17,6 +17,9 @@ declare_id!("3JnJ727jWEmPVU8qfXwtH63sCNDX7nMgsLbg8qy8aaPX");
 
 pub const DELEGATION_PROGRAM_ID: Pubkey = sdk::id();
 
+pub use sdk::delegate_args::DelegateAccountMetas;
+pub use sdk::delegate_args::DelegateAccounts;
+
 pub const SEEDS: &[u8] = b"bencher-pda";
 
 fn process_instruction(

@@ -26,12 +26,13 @@ fn main() -> BenchResult<()> {
             let task = local.run_until(bencher.run());
             let results = rt.block_on(task);
             rt.block_on(local);
-            results.stats();
+            results.stats()
         });
         handles.push(handle);
     }
     for h in handles {
-        h.join().expect("failed to join on tokio runtime thread")
+        let stats = h.join().expect("failed to join on tokio runtime thread");
+        println!("stats: {stats}")
     }
     Ok(())
 }

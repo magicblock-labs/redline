@@ -3462,6 +3462,7 @@ dependencies = [
  "bincode",
  "redline-core",
  "redline-program",
+ "solana-commitment-config",
  "solana-instruction",
  "solana-keypair",
  "solana-pubkey",

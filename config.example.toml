@@ -44,7 +44,7 @@ mode = "simple-byte-set"
 # every clone-frequency-secs, and airdrop will be performed on of the readonly
 # accounts on chain, thus triggering clone of account on ER 
 
-# mode = { "trigger-clones" = { clone-frequency-secs = 1, accounts-count = 10 } }
+# mode = { "trigger-clones" = { clone-frequency-secs = 1, accounts-count = 16 } }
 
 #--------------------------------------------------------------------------------
 # performs an expensive hash compute in loop (iters times), 28 iterations

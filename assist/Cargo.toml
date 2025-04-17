@@ -12,6 +12,7 @@ keywords.workspace = true
 
 [dependencies]
 rpc = { package = "solana-rpc-client", version = "2.2" }
+commitment = { package = "solana-commitment-config", version = "2.2" }
 keypair = { workspace = true }
 signer = { workspace = true }
 pubkey = { workspace = true }

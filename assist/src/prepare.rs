@@ -1,13 +1,20 @@
-use core::{AccountSize, BenchMode, BenchResult, Config};
-use std::{path::PathBuf, sync::Arc};
+use core::{BenchMode, BenchResult, Config};
+use std::path::PathBuf;
 
+use commitment::CommitmentConfig;
+use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
-use program::{utils::derive_pda, DELEGATION_PROGRAM_ID};
+use program::{
+    instruction::Instruction, utils::derive_pda, DelegateAccountMetas, DelegateAccounts,
+    DELEGATION_PROGRAM_ID,
+};
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
 use signer::{EncodableKey, Signer};
+use transaction::Transaction;
 
-const LAMPORTS_PER_BENCH: u64 = 100_000_000;
+const LAMPORTS_PER_BENCH: u64 = 200_000_000;
+const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
 
 struct Preparator {
     config: Config,
@@ -30,6 +37,7 @@ pub async fn prepare(path: PathBuf) -> BenchResult<()> {
         keypairs,
     };
     preparator.fund().await?;
+    preparator.init().await?;
 
     Ok(())
 }
@@ -40,6 +48,7 @@ impl Preparator {
             let pk = &kp.pubkey();
             let lamports = self.client.get_balance(pk).await?;
             if lamports < LAMPORTS_PER_BENCH {
+                println!("Funding keypair for benchmark: {pk}");
                 self.transfer(pk, LAMPORTS_PER_BENCH - lamports).await?;
             }
         }
@@ -47,32 +56,66 @@ impl Preparator {
     }
 
     async fn init(&self) -> BenchResult<()> {
+        let space = self.config.data.account_size as u32;
         let accounts = self.extract_accounts(&self.config.benchmark.mode);
-        for (pk, bump) in accounts {
+        for pda in accounts {
             let response = self
                 .client
-                .get_account_with_commitment(&pk, Default::default())
+                .get_account_with_commitment(&pda.pubkey, Default::default())
                 .await?;
+            let hash = self.client.get_latest_blockhash().await?;
             match response.value {
-                Some(acc) if acc.owner != DELEGATION_PROGRAM_ID => {
-                    self.delegate(pk, bump).await?;
+                Some(acc) if acc.owner == DELEGATION_PROGRAM_ID => {
+                    continue;
                 }
-                _ => todo!(),
+                None => {
+                    println!("Initializing PDA: {}", pda.pubkey);
+                    let ix = Instruction::InitAccount {
+                        space,
+                        seed: pda.seed,
+                        bump: pda.bump,
+                    };
+                    let payer = pda.payer.pubkey();
+                    let metas = vec![
+                        AccountMeta::new(payer, true),
+                        AccountMeta::new(pda.pubkey, false),
+                        AccountMeta::new_readonly(Pubkey::default(), false),
+                    ];
+                    let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
+                    let txn = Transaction::new_signed_with_payer(
+                        &[ix],
+                        Some(&payer),
+                        &[&pda.payer],
+                        hash,
+                    );
+                    self.client
+                        .send_and_confirm_transaction_with_spinner_and_commitment(&txn, CONFIRMED)
+                        .await?;
+                }
+                _ => {}
             }
+            println!("Delegating PDA: {}", pda.pubkey);
+            self.delegate(&pda).await?;
         }
-        todo!()
+        Ok(())
     }
 
-    fn extract_accounts(&self, mode: &BenchMode) -> Vec<(Pubkey, u8)> {
+    fn extract_accounts(&self, mode: &BenchMode) -> Vec<Pda> {
         use BenchMode::*;
+        let space = self.config.data.account_size as u32;
 
-        let derive_accounts = |count: u8| {
+        let derive_accounts = |count: u8| -> Vec<Pda> {
             self.keypairs
                 .iter()
-                .flat_map(|k| {
-                    (0..count).map(move |seed| {
-                        derive_pda(k.pubkey(), self.config.data.account_size as u32, seed)
-                    })
+                .flat_map(|k| (0..count).map(move |seed| (k, seed)))
+                .map(|(k, seed)| {
+                    let (pubkey, bump) = derive_pda(k.pubkey(), space, seed);
+                    Pda {
+                        payer: k.insecure_clone(),
+                        pubkey,
+                        seed,
+                        bump,
+                    }
                 })
                 .collect()
         };
@@ -89,14 +132,36 @@ impl Preparator {
         }
     }
 
-    async fn delegate(&self, acc: Pubkey, seed: u8) -> BenchResult<()> {
-        todo!()
+    async fn delegate(&self, pda: &Pda) -> BenchResult<()> {
+        let ix = Instruction::Delegate { seed: pda.seed };
+        let payer = pda.payer.pubkey();
+        let hash = self.client.get_latest_blockhash().await?;
+
+        let accounts = DelegateAccounts::new(pda.pubkey, program::id());
+        let metas = DelegateAccountMetas::from(accounts).into_vec(payer);
+
+        let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
+        let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&pda.payer], hash);
+
+        self.client
+            .send_and_confirm_transaction_with_spinner_and_commitment(&txn, CONFIRMED)
+            .await?;
+        Ok(())
     }
 
     async fn transfer(&self, to: &Pubkey, amount: u64) -> BenchResult<()> {
         let hash = self.client.get_latest_blockhash().await?;
         let txn = systransaction::transfer(&self.vault, to, amount, hash);
-        self.client.send_transaction(&txn).await?;
+        self.client
+            .send_and_confirm_transaction_with_spinner(&txn)
+            .await?;
         Ok(())
     }
+}
+
+struct Pda {
+    payer: Keypair,
+    pubkey: Pubkey,
+    seed: u8,
+    bump: u8,
 }

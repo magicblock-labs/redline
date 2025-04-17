@@ -1,2 +1,4 @@
 /target
-bencher.json
+redline.json
+program/fixtures/redline-keypair.json
+
