@@ -1,5 +1,5 @@
-use redline::instruction::Instruction;
 use redline::utils::derive_pda;
+use redline::{instruction::Instruction, DELEGATION_PROGRAM_ID};
 use sdk::delegate_args::{DelegateAccountMetas, DelegateAccounts};
 use solana_program_test::*;
 use solana_sdk::{
@@ -68,7 +68,7 @@ async fn setup() -> (BanksClient, Keypair) {
     let mut program_test = ProgramTest::default();
     std::env::set_var("SBF_OUT_DIR", "fixtures");
 
-    program_test.add_program("dlp", sdk::id(), None);
+    program_test.add_program("dlp", DELEGATION_PROGRAM_ID, None);
     program_test.add_program("redline", redline::id(), None);
 
     let payer = Keypair::new();

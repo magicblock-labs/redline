@@ -82,7 +82,7 @@ pub enum BenchMode {
         iters: u32,
     },
     ReadWrite {
-        accounts_pool_size: u8,
+        accounts_count: u8,
     },
     Mixed(Vec<Self>),
 }

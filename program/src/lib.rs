@@ -15,6 +15,8 @@ use processors::*;
 entrypoint::entrypoint!(process_instruction);
 declare_id!("3JnJ727jWEmPVU8qfXwtH63sCNDX7nMgsLbg8qy8aaPX");
 
+pub const DELEGATION_PROGRAM_ID: Pubkey = sdk::id();
+
 pub const SEEDS: &[u8] = b"bencher-pda";
 
 fn process_instruction(

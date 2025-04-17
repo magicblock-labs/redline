@@ -168,8 +168,8 @@ pub fn make_provider(mode: &BenchMode, base: Pubkey, space: u32) -> Box<dyn Tran
                 last_chain_update: Instant::now(),
             })
         }
-        BenchMode::ReadWrite { accounts_pool_size } => {
-            let accounts = (1..=*accounts_pool_size)
+        BenchMode::ReadWrite { accounts_count } => {
+            let accounts = (1..=*accounts_count)
                 .map(|seed| derive_pda(base, space, seed).0)
                 .collect();
             Box::new(ReadWriteAccountsTransaction {

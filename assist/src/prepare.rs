@@ -1,7 +1,8 @@
-use core::{AccountSize, BenchResult, Config};
+use core::{AccountSize, BenchMode, BenchResult, Config};
 use std::{path::PathBuf, sync::Arc};
 
 use keypair::Keypair;
+use program::{utils::derive_pda, DELEGATION_PROGRAM_ID};
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
 use signer::{EncodableKey, Signer};
@@ -46,10 +47,49 @@ impl Preparator {
     }
 
     async fn init(&self) -> BenchResult<()> {
+        let accounts = self.extract_accounts(&self.config.benchmark.mode);
+        for (pk, bump) in accounts {
+            let response = self
+                .client
+                .get_account_with_commitment(&pk, Default::default())
+                .await?;
+            match response.value {
+                Some(acc) if acc.owner != DELEGATION_PROGRAM_ID => {
+                    self.delegate(pk, bump).await?;
+                }
+                _ => todo!(),
+            }
+        }
         todo!()
     }
 
-    async fn delegate() -> BenchResult<()> {
+    fn extract_accounts(&self, mode: &BenchMode) -> Vec<(Pubkey, u8)> {
+        use BenchMode::*;
+
+        let derive_accounts = |count: u8| {
+            self.keypairs
+                .iter()
+                .flat_map(|k| {
+                    (0..count).map(move |seed| {
+                        derive_pda(k.pubkey(), self.config.data.account_size as u32, seed)
+                    })
+                })
+                .collect()
+        };
+
+        match mode {
+            SimpleByteSet | HighCuCost { .. } => derive_accounts(1),
+            TriggerClones { accounts_count, .. } | ReadWrite { accounts_count } => {
+                derive_accounts(*accounts_count)
+            }
+            Mixed(modes) => modes
+                .iter()
+                .flat_map(|m| self.extract_accounts(m))
+                .collect(),
+        }
+    }
+
+    async fn delegate(&self, acc: Pubkey, seed: u8) -> BenchResult<()> {
         todo!()
     }
 

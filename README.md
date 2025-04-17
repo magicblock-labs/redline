@@ -60,7 +60,7 @@ enforce-total-sync = false
 account-encoding = "base64+zstd"
 account-size = "bytes128"
 ```
-See `config.example.toml` for detail explanation of various options
+See [`config.example.toml`](./config.example.toml) for detailed explanation of the various options
 
 ## Conclusion
 
