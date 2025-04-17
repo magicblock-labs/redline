@@ -2,7 +2,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use pubkey::Pubkey;
 use transaction::Transaction;
 
-use crate::config::AccountEncoding;
+use core::AccountEncoding;
 
 pub fn airdrop(pubkey: Pubkey, amount: u64) -> String {
     format!(

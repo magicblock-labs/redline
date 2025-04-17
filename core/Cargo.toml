@@ -1,5 +1,5 @@
 [package]
-name = "redline-tools"
+name = "redline-core"
 authors.workspace = true
 edition.workspace = true
 version.workspace = true
@@ -11,3 +11,6 @@ readme.workspace = true
 keywords.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+hyper = { workspace = true }
+toml = "0.8"

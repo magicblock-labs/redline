@@ -2,7 +2,8 @@
 members = [
     "bencher",
 	"program",
-	"tools"
+	"assist", 
+	"core"
 ]
 resolver = "2"
 
@@ -18,6 +19,13 @@ readme = "../README.md"
 keywords = ["solana", "crypto", "ephemeral-rollups", "magicblock", "benchmark"]
 
 [workspace.dependencies]
-pubkey = { package = "solana-pubkey", version = "2", features = [ "curve25519" ] }
 serde = { version = "1.0", features = [ "derive" ] }
+tokio = { version = "1.0", features = [ "rt", "macros" ] }
+hyper = { version = "1.0", features = [ "client", "http2" ] }
 bincode = "1.3"
+
+pubkey = { package = "solana-pubkey", version = "2", features = [ "curve25519" ] }
+keypair = { package = "solana-keypair", version = "2.2" }
+signer = { package = "solana-signer", version = "2.2" }
+instruction = { package = "solana-instruction", version = "2.2" }
+transaction = { package = "solana-transaction", version = "2", features = [ "bincode" ] }

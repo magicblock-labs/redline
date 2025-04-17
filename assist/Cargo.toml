@@ -1,0 +1,32 @@
+[package]
+name = "redline-assist"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+
+[dependencies]
+rpc = { package = "solana-rpc-client", version = "2.2" }
+keypair = { workspace = true }
+signer = { workspace = true }
+pubkey = { workspace = true }
+instruction = { workspace = true }
+transaction = { workspace = true }
+systransaction = { package = "solana-system-transaction", version = "2.2" }
+
+
+structopt = "0.3"
+bincode = { workspace = true }
+
+tokio = { workspace = true }
+
+core = { path = "../core", package = "redline-core" }
+program = { path = "../program", package = "redline-program" }
+
+
+

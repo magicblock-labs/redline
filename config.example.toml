@@ -1,7 +1,7 @@
 # Example configuration file for Redline application
 
+# Connection settings for main chain and ephemeral URLs
 [connection]
-# Connection settings for blockchain and ephemeral URLs
 # URL of the chain node to connect to
 chain-url = "http://api.devnet.solana.com"
 # URL of the ephemeral node to connect to
@@ -13,8 +13,8 @@ http-connections-count = 10
 # Maximum number of WebSocket connections
 ws-connections-count = 5
 
-[benchmark]
 # Benchmark settings
+[benchmark]
 # Number of iterations for the benchmark
 iterations = 15000
 # Transactions per second to target
@@ -23,23 +23,47 @@ tps = 100
 concurrency = 16
 # Perform a preflight check for each transaction: true or false
 preflight-check = true
-# Path to the keypair files
+
+# Inidicates how many concurrent benchmarks to run
 # 
-# NOTE: each provided keypair will start its own thread of execution for
-# benchmark, dramatically increasing the load on target validator. I.e. each
-# keypair will run its own benchmark in parallel with others, so for example
-# providing 10 keypairs has 10x load in comparison to a single keypair
-keypairs = ["keypairs/1.json"]
+# NOTE: each provided unit of parallelism will start its own thread of
+# execution for benchmark, dramatically increasing the load on target
+# validator. I.e. each benchmark will run in parallel with others on their own
+# OS thread, so for example providing 10 for parallelism, has 10x load in
+# comparison to 1. This might negatively affect validator performance running
+# on the same host as the REDLINE will compete for compute resources with
+# validator process
+parallelism = 1
 
 # Mode of benchmark, options:
 mode = "simple-byte-set"
 
 # Alternative modes are:
+#--------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------
+# every clone-frequency-secs, and airdrop will be performed on of the readonly
+# accounts on chain, thus triggering clone of account on ER 
 
-# mode = { "trigger-clones" = { clone-frequency-secs = 60, accounts-count = 10 } }
-# mode = { "high-cu-cost" = { iters = 500 } }
-# mode = { "read-write" = { accounts-pool-size = 5 } }
-# mode = { "mixed" = [ { "simple-byte-set" }, { "high-cu-cost" = { iters = 250 } } ] }
+# mode = { "trigger-clones" = { clone-frequency-secs = 1, accounts-count = 10 } }
+
+#--------------------------------------------------------------------------------
+# performs an expensive hash compute in loop (iters times), 28 iterations
+# consume almost the entirety of 200K CUs
+
+# mode = { "high-cu-cost" = { iters = 8 } }
+
+#--------------------------------------------------------------------------------
+# performs data copy operation between accounts in the pool, each transaction
+# involves 2 accounts, one readable, one writable, thus high number of
+# transactions using intersecting set of accounts will create pressure on
+# scheduler due to account locking
+
+# mode = { "read-write" = { accounts-pool-size = 32 } }
+
+#--------------------------------------------------------------------------------
+# a combination of various benchmarking modes, to simulate more real world scenarios
+
+# mode = { "mixed" = [ { "simple-byte-set" }, { "high-cu-cost" = { iters = 28 } } ] }
 
 [subscription]
 # Subscription settings

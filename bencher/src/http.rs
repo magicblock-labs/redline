@@ -13,8 +13,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use json::LazyValue;
 use tokio::net::TcpStream;
 
-use crate::config::{ConnectionSettings, ConnectionType, Url};
 use crate::BenchResult;
+use core::{ConnectionSettings, ConnectionType, Url};
 
 pub enum InnerConnection {
     Http1(Http1Sender<String>),

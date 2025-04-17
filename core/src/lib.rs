@@ -1,11 +1,14 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::{error::Error, path::PathBuf};
 
-use json::{Deserialize, Serialize};
 use serde::{
     de::{self, Visitor},
-    Deserializer,
+    Deserialize, Deserializer, Serialize,
 };
+
+pub type DynError = Box<dyn Error + 'static>;
+pub type BenchResult<T> = Result<T, DynError>;
+
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -14,6 +17,20 @@ pub struct Config {
     pub benchmark: BenchmarkSettings,
     pub subscription: SubscriptionSettings,
     pub data: DataSettings,
+}
+
+impl Config {
+    pub fn from_path(path: PathBuf) -> BenchResult<Self> {
+        let config = std::fs::read_to_string(path)?;
+        toml::from_str(&config).map_err(Into::into)
+    }
+    pub fn from_args() -> BenchResult<Self> {
+        let path = std::env::args()
+            .nth(1)
+            .ok_or("usage: redline config.toml")?
+            .into();
+        Self::from_path(path)
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -35,8 +52,7 @@ pub struct BenchmarkSettings {
     pub tps: u32,
     pub concurrency: usize,
     pub preflight_check: bool,
-    #[serde(skip_serializing)]
-    pub keypairs: Vec<PathBuf>,
+    pub parallelism: u8,
     pub mode: BenchMode,
 }
 

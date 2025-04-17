@@ -1,3 +1,4 @@
+use core::{ConnectionSettings, Url};
 use std::collections::HashMap;
 
 use fastwebsockets::{handshake, Frame, OpCode, Payload, WebSocket};
@@ -14,10 +15,7 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use crate::{
-    config::{ConnectionSettings, Url},
-    BenchResult, ShutDown,
-};
+use crate::{BenchResult, ShutDown};
 
 pub struct WsWorker<F, V> {
     ws: WebSocket<TokioIo<Upgraded>>,

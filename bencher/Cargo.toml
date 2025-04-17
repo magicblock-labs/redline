@@ -11,25 +11,25 @@ license = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-tokio = { version = "1.0", features = [ "rt", "macros" ] }
-hyper = { version = "1.0", features = [ "client", "http2" ] }
+tokio = { workspace = true }
+hyper = { workspace = true }
 hyper-util = { version = "0.1", features = [ "tokio" ] }
 http-body-util = "0.1"
 fastwebsockets = { version = "0.10", features = [ "upgrade", "unstable-split" ] }
 
 transaction = { package = "solana-transaction", version = "2", features = [ "bincode" ] }
 pubkey = { workspace = true }
-keypair = { package = "solana-keypair", version = "2" }
-signer = { package = "solana-signer", version = "2" }
-hash = { package = "solana-hash", version = "2" }
-instruction = { package = "solana-instruction", version = "2" }
+keypair = { workspace = true }
+signer = { workspace = true }
+instruction = { workspace = true }
+hash = { package = "solana-hash", version = "2.2" }
 
 program = { path = "../program", package = "redline-program" }
+core = { path = "../core", package = "redline-core" }
 
 json = { package = "sonic-rs", version = "0.5" }
 serde = { workspace = true }
 bincode = { workspace = true }
-toml = "0.8"
 bs58 = "0.5"
 base64 = "0.22"
 zstd = "0.13"

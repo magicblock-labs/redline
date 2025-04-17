@@ -1,3 +1,4 @@
+use core::BenchMode;
 use std::time::{Duration, Instant};
 
 use hash::Hash;
@@ -11,7 +12,7 @@ use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
 use signer::Signer;
 use transaction::Transaction;
 
-use crate::{config::BenchMode, http::Connection, payload::airdrop};
+use crate::{http::Connection, payload::airdrop};
 
 pub trait TransactionProvider {
     fn generateix(&mut self, id: u64) -> SolanaInstruction;

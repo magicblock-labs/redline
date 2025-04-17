@@ -1,3 +1,6 @@
+use core::Config;
+use std::time::Duration;
+
 use hyper::Request;
 use keypair::Keypair;
 use signer::Signer;
@@ -5,7 +8,6 @@ use tokio::sync::oneshot;
 
 use crate::{
     blockhash::BlockHashProvider,
-    config::Config,
     confirmation::{Confirmations, ConfirmationsBundle, ConfirmationsDB, EventConfirmer},
     extractor::{
         account_update_extractor, signature_response_extractor, signature_status_extractor,
@@ -109,6 +111,7 @@ impl BenchRunner {
                 };
                 let _ = con.send(sub).await;
             }
+            tokio::time::sleep(Duration::from_secs(1)).await
         }
 
         Ok(Self {
