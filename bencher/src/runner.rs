@@ -98,13 +98,14 @@ impl BenchRunner {
             .await?;
             let encoding = config.data.account_encoding;
             for (id, pk) in transaction_provider.accounts().into_iter().enumerate() {
+                let id = id as u64;
                 let tx = account_confirmations.borrow().tx.clone();
                 let con = accounts_websocket.connection();
                 let sub = Subscription {
                     tx,
-                    payload: payload::accountsub(pk, encoding),
+                    payload: payload::accountsub(pk, encoding, id),
                     oneshot: false,
-                    id: id as u64,
+                    id,
                 };
                 let _ = con.send(sub).await;
             }
@@ -174,7 +175,7 @@ impl BenchRunner {
             let tx = self.signature_confirmations.borrow().tx.clone();
             let sub = Subscription {
                 tx,
-                payload: payload::signaturesub(&txn),
+                payload: payload::signaturesub(&txn, id),
                 oneshot: false,
                 id,
             };

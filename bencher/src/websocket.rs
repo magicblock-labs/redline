@@ -76,12 +76,11 @@ where
     }
 
     async fn run(mut self) {
-        #[derive(Deserialize)]
+        #[derive(Deserialize, Debug)]
         struct Confirmation {
             result: u64,
             id: u64,
         }
-        let mut wbuffer = Vec::with_capacity(512);
         loop {
             tokio::select! {
                 Ok(frame) = self.ws.read_frame() => {
@@ -115,14 +114,14 @@ where
                         self.subscriptions.remove(&id);
                     }
                 }
-                Some(sub) = self.rx.recv() => {
-                    json::to_writer(&mut wbuffer, &sub.payload).unwrap();
-                    let payload = Payload::BorrowedMut(&mut wbuffer);
+                Some(mut sub) = self.rx.recv() => {
+                    let payload = Payload::Owned(std::mem::take(&mut sub.payload).into_bytes());
                     // TODO: reconnect on error
                     self.ws
                         .write_frame(Frame::text(payload))
                         .await
                         .expect("failed to send data websocket");
+                    self.ws.flush().await.expect("failed to flush ws stream");
                     self.inflights.insert(sub.id, sub);
                 }
                 else => {

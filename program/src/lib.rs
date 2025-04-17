@@ -3,7 +3,7 @@
 use solana_program::{
     account_info::AccountInfo,
     declare_id,
-    entrypoint::{entrypoint, ProgramResult},
+    entrypoint::{self, ProgramResult},
     msg,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -12,7 +12,7 @@ use solana_program::{
 use instruction::Instruction;
 use processors::*;
 
-entrypoint!(process_instruction);
+entrypoint::entrypoint!(process_instruction);
 declare_id!("3JnJ727jWEmPVU8qfXwtH63sCNDX7nMgsLbg8qy8aaPX");
 
 pub const SEEDS: &[u8] = b"bencher-pda";

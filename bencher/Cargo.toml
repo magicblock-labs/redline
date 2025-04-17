@@ -1,5 +1,5 @@
 [package]
-name = "redline-bencher"
+name = "redline"
 version = { workspace = true }
 authors = { workspace = true }
 repository = { workspace = true }
@@ -18,7 +18,7 @@ http-body-util = "0.1"
 fastwebsockets = { version = "0.10", features = [ "upgrade", "unstable-split" ] }
 
 transaction = { package = "solana-transaction", version = "2", features = [ "bincode" ] }
-pubkey = { package = "solana-pubkey", version = "2" }
+pubkey = { workspace = true }
 keypair = { package = "solana-keypair", version = "2" }
 signer = { package = "solana-signer", version = "2" }
 hash = { package = "solana-hash", version = "2" }

@@ -1,4 +1,4 @@
-use solana_program::pubkey::Pubkey;
+use pubkey::Pubkey;
 
 use crate::SEEDS;
 

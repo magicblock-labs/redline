@@ -18,5 +18,6 @@ readme = "../README.md"
 keywords = ["solana", "crypto", "ephemeral-rollups", "magicblock", "benchmark"]
 
 [workspace.dependencies]
+pubkey = { package = "solana-pubkey", version = "2", features = [ "curve25519" ] }
 serde = { version = "1.0", features = [ "derive" ] }
 bincode = "1.3"

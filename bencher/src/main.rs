@@ -28,10 +28,10 @@ fn main() -> BenchResult<()> {
             let bencher = local
                 .block_on(&rt, BenchRunner::new(kp, &config))
                 .expect("failed to create bencher");
-            let task = local.run_until(bencher.run());
-            let results = rt.block_on(task);
+            //let task = local.run_until(bencher.run());
+            //let results = rt.block_on(task);
             rt.block_on(local);
-            results.stats();
+            //results.stats();
         });
         handles.push(h);
     }
