@@ -49,7 +49,7 @@ fn main() -> BenchResult<()> {
         .truncate(true)
         .open(&output)
         .map(BufferedWriter::new)?;
-    json::to_writer(output, &stats)?;
+    json::to_writer(writer, &stats)?;
     println!(
         "The results of the benchmark are written to {}",
         output.display()
