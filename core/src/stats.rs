@@ -7,6 +7,7 @@ pub struct BenchStatistics {
     pub http_requests_latency: ObservationsStats,
     pub account_update_latency: ObservationsStats,
     pub signature_confirmation_latency: ObservationsStats,
+
     pub transactions_per_second: ObservationsStats,
 }
 
@@ -41,11 +42,11 @@ impl BenchStatistics {
 #[serde(rename_all = "kebab-case")]
 pub struct ObservationsStats {
     pub count: usize,
-    pub median: u32,
+    pub median: i32,
     pub min: u32,
     pub max: u32,
-    pub avg: u32,
-    pub quantile95: u32,
+    pub avg: i32,
+    pub quantile95: i32,
     pub stddev: u32,
 }
 
@@ -54,7 +55,7 @@ impl ObservationsStats {
         let total_count = stats.len();
         let sum = stats
             .iter()
-            .fold((0usize, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32), |acc, stat| {
+            .fold((0usize, 0i32, 0u32, 0u32, 0i32, 0i32, 0u32), |acc, stat| {
                 (
                     acc.0 + stat.count,
                     acc.1 + stat.median,
@@ -68,11 +69,11 @@ impl ObservationsStats {
 
         ObservationsStats {
             count: sum.0 / total_count,
-            median: sum.1 / total_count as u32,
+            median: sum.1 / total_count as i32,
             min: sum.2 / total_count as u32,
             max: sum.3 / total_count as u32,
-            avg: sum.4 / total_count as u32,
-            quantile95: sum.5 / total_count as u32,
+            avg: sum.4 / total_count as i32,
+            quantile95: sum.5 / total_count as i32,
             stddev: sum.6 / total_count as u32,
         }
     }
@@ -83,8 +84,8 @@ impl ObservationsStats {
         observations.sort();
         let count = observations.len();
         let sum: u64 = observations.iter().map(|&x| x as u64).sum();
-        let avg = (sum / count as u64) as u32;
-        let median = observations[count / 2];
+        let avg = (sum / count as u64) as i32;
+        let median = observations[count / 2] as i32;
         let min = *observations.first().unwrap();
         let max = *observations.last().unwrap();
         let q95 = (count as f64 * 0.95).ceil() as usize;
@@ -93,7 +94,7 @@ impl ObservationsStats {
         } else {
             q95 - 1
         };
-        let quantile95 = observations[qindex];
+        let quantile95 = observations[qindex] as i32;
 
         let variance = observations
             .iter()

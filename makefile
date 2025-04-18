@@ -1,33 +1,39 @@
+SRC := $(find bencher assist core -type f -name '*.rs')
+
 CONFIG ?= config.toml
 
-RUN_CMD = @cargo run --release --quiet --bin
+TARGET_DIR = target/release
+REDLINE=$(TARGET_DIR)/redline
+REDLINE_ASSIST=$(TARGET_DIR)/redline-assist
 
-build:
+
+build: $(REDLINE) $(REDLINE_ASSIST)
+
+$(REDLINE) $(REDLINE_ASSIST): $(SRC)
 	@cargo build --release --bins
 
-bench:
-	$(RUN_CMD) redline $(CONFIG)
+bench: $(REDLINE)
+	@$(REDLINE) $(CONFIG)
 
 OUTPUT ?=
 
-report:
-	$(RUN_CMD) redline-assist report $(OUTPUT)
+report: $(REDLINE_ASSIST)
+	@$(REDLINE_ASSIST) report $(OUTPUT)
 
-prepare:
-	$(RUN_CMD) redline-assist prepare $(CONFIG)
+prepare: $(REDLINE_ASSIST)
+	@$(REDLINE_ASSIST) prepare $(CONFIG)
 
+cleanup: $(REDLINE_ASSIST)
+	@$(REDLINE_ASSIST) cleanup
 
-cleanup: 
-	$(RUN_CMD) redline-assist cleanup
-
-clean-all: 
-	$(RUN_CMD) redline-assist cleanup -a 
+clean-all: $(REDLINE_ASSIST)
+	@$(REDLINE_ASSIST) cleanup -a 
 
 THIS ?=
 THAT ?=
 SENSITIVITY ?= 15
 SILENT ?= false
 
-compare:
-	$(RUN_CMD) redline-assist compare --sensitivity $(SENSITIVITY) $(THIS) $(THIS)
+compare: $(REDLINE_ASSIST)
+	@$(REDLINE_ASSIST) compare --sensitivity $(SENSITIVITY) $(THIS) $(THIS)
 
