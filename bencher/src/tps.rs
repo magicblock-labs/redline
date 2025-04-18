@@ -5,6 +5,8 @@ use std::{
 
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
+use crate::stats::ObservationsStats;
+
 const ONESEC: Duration = Duration::from_secs(1);
 const ONEMS: Duration = Duration::from_millis(1);
 
@@ -31,7 +33,9 @@ impl TpsManager {
         let elapsed = self.epoch.elapsed();
         if elapsed >= ONESEC {
             self.epoch = Instant::now();
-            self.observations.push(self.count);
+            if self.count > 0 {
+                self.observations.push(self.count);
+            }
             self.count = 0;
         }
         self.count += 1;
@@ -42,5 +46,9 @@ impl TpsManager {
             tokio::time::sleep(lag).await;
         }
         self.permits.clone().acquire_owned().await.unwrap()
+    }
+
+    pub fn stats(self) -> ObservationsStats {
+        ObservationsStats::new(self.observations, true)
     }
 }

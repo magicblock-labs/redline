@@ -1,9 +1,10 @@
-use std::rc::Rc;
+use std::{rc::Rc, thread::JoinHandle};
 
 use core::{BenchResult, Config};
 use keypair::Keypair;
 use runner::BenchRunner;
 use signer::EncodableKey;
+use stats::BenchStatistics;
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 
 fn main() -> BenchResult<()> {
@@ -21,7 +22,7 @@ fn main() -> BenchResult<()> {
                 .unwrap();
             let local = LocalSet::new();
             let bencher = local
-                .block_on(&rt, BenchRunner::new(kp, &config))
+                .block_on(&rt, BenchRunner::new(kp, config))
                 .expect("failed to create bencher");
             let task = local.run_until(bencher.run());
             let results = rt.block_on(task);
@@ -30,10 +31,14 @@ fn main() -> BenchResult<()> {
         });
         handles.push(handle);
     }
-    for h in handles {
-        let stats = h.join().expect("failed to join on tokio runtime thread");
-        println!("stats: {stats}")
-    }
+
+    let stats = handles
+        .into_iter()
+        .map(JoinHandle::join)
+        .collect::<std::thread::Result<_>>()
+        .expect("failed to join tokio runtime for bencher");
+    let stats = BenchStatistics::merge(stats);
+    println!("{}", json::to_string_pretty(&stats).unwrap());
     Ok(())
 }
 
@@ -43,7 +48,6 @@ type ShutDown = Rc<ShutDownSender>;
 
 impl Drop for ShutDownSender {
     fn drop(&mut self) {
-        println!("shutting everything down");
         let _ = self.0.send(());
     }
 }

@@ -47,7 +47,6 @@ impl<V> EventConfirmer<V> {
                 },
             }
         }
-        println!("event confirmer has terminated id")
     }
 }
 
@@ -63,7 +62,6 @@ impl EventConfirmer<u64> {
                 },
             }
         }
-        println!("event confirmer has terminated value")
     }
 }
 
@@ -99,31 +97,6 @@ impl<V> Confirmations<V> {
     }
 
     pub fn finalize(self) -> ObservationsStats {
-        ObservationsStats::new(self.observations)
-    }
-}
-
-pub struct ConfirmationsBundle {
-    pub accounts_updates: ConfirmationsDB<u64>,
-    pub signature_confirmations: ConfirmationsDB<bool>,
-    pub delivery_confirmations: ConfirmationsDB<()>,
-}
-
-impl ConfirmationsBundle {
-    pub fn stats(self) -> json::Value {
-        macro_rules! finalize {
-            ($confirmation: expr) => {
-                Rc::try_unwrap($confirmation)
-                    .unwrap()
-                    .into_inner()
-                    .finalize()
-            };
-        }
-        let stats = [
-            finalize!(self.delivery_confirmations),
-            finalize!(self.accounts_updates),
-            finalize!(self.signature_confirmations),
-        ];
-        json::to_value(&stats).unwrap()
+        ObservationsStats::new(self.observations, false)
     }
 }

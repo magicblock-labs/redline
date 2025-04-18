@@ -1,5 +1,5 @@
 use core::Config;
-use std::time::Duration;
+use std::{hint::black_box, rc::Rc, time::Duration};
 
 use hyper::Request;
 use keypair::Keypair;
@@ -8,12 +8,13 @@ use tokio::sync::oneshot;
 
 use crate::{
     blockhash::BlockHashProvider,
-    confirmation::{Confirmations, ConfirmationsBundle, ConfirmationsDB, EventConfirmer},
+    confirmation::{Confirmations, ConfirmationsDB, EventConfirmer},
     extractor::{
         account_update_extractor, signature_response_extractor, signature_status_extractor,
     },
     http::{Connection, ConnectionPool},
     payload,
+    stats::BenchStatistics,
     tps::TpsManager,
     transaction::TransactionProvider,
     websocket::{Subscription, WebsocketPool},
@@ -44,10 +45,11 @@ pub struct BenchRunner {
     enforce_total_sync: bool,
 
     shutdown: ShutDown,
+    config: json::Value,
 }
 
 impl BenchRunner {
-    pub async fn new(signer: Keypair, config: &Config) -> BenchResult<Self> {
+    pub async fn new(signer: Keypair, config: Config) -> BenchResult<Self> {
         let chain = Connection::new(
             &config.connection.chain_url,
             config.connection.http_connection_type,
@@ -132,10 +134,11 @@ impl BenchRunner {
             enforce_total_sync: config.subscription.enforce_total_sync,
             preflight_check: config.benchmark.preflight_check,
             shutdown,
+            config: json::to_value(&config).unwrap(),
         })
     }
 
-    pub async fn run(mut self) -> ConfirmationsBundle {
+    pub async fn run(mut self) -> BenchResults {
         for i in 0..self.iterations {
             self.transaction_provider.bookkeep(&mut self.chain, i);
             self.step(i).await;
@@ -144,10 +147,13 @@ impl BenchRunner {
             "benchmark run is complete, transaction sent: {}",
             self.iterations
         );
-        ConfirmationsBundle {
-            accounts_updates: self.account_confirmations,
-            signature_confirmations: self.signature_confirmations,
+
+        BenchResults {
+            configuration: self.config,
             delivery_confirmations: self.delivery_confirmations,
+            account_confirmations: self.account_confirmations,
+            signature_confirmations: self.signature_confirmations,
+            tps_manager: self.tps_manager,
         }
     }
 
@@ -184,7 +190,7 @@ impl BenchRunner {
             let sub = Subscription {
                 tx,
                 payload: payload::signaturesub(&txn, id),
-                oneshot: false,
+                oneshot: true,
                 id,
             };
             let _ = con.send(sub).await;
@@ -196,8 +202,9 @@ impl BenchRunner {
         let delivery = self.delivery_confirmations.clone();
         delivery.borrow_mut().track(id, None);
 
-        let shutdown = self.shutdown.clone();
+        let mut shutdown = self.shutdown.clone();
         let task = async move {
+            shutdown = black_box(shutdown);
             match response.resolve().await {
                 Ok(Some(false)) => {
                     eprintln!("transaction failed to be executed");
@@ -220,5 +227,33 @@ impl BenchRunner {
             drop(shutdown)
         };
         tokio::task::spawn_local(task);
+    }
+}
+
+pub struct BenchResults {
+    configuration: json::Value,
+    account_confirmations: ConfirmationsDB<u64>,
+    signature_confirmations: ConfirmationsDB<bool>,
+    delivery_confirmations: ConfirmationsDB<()>,
+    tps_manager: TpsManager,
+}
+
+impl BenchResults {
+    pub fn stats(self) -> BenchStatistics {
+        macro_rules! finalize {
+            ($confirmation: expr) => {
+                Rc::try_unwrap($confirmation)
+                    .unwrap()
+                    .into_inner()
+                    .finalize()
+            };
+        }
+        BenchStatistics {
+            configuration: self.configuration,
+            account_update_latency: finalize!(self.account_confirmations),
+            signature_confirmation_latency: finalize!(self.signature_confirmations),
+            http_requests_latency: finalize!(self.delivery_confirmations),
+            transactions_per_second: self.tps_manager.stats(),
+        }
     }
 }

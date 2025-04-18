@@ -9,18 +9,18 @@ ephem-url = "http://127.0.0.1:8899"
 # Type of HTTP connection: "http1" or "http2"
 http-connection-type = "http2"
 # Maximum number of HTTP connections
-http-connections-count = 128
+http-connections-count = 16
 # Maximum number of WebSocket connections
-ws-connections-count = 5
+ws-connections-count = 2
 
 # Benchmark settings
 [benchmark]
 # Number of iterations for the benchmark
-iterations = 200
+iterations = 10000
 # Transactions per second to target
-tps = 200
+tps = 1000
 # Number of concurrent executions
-concurrency = 4
+concurrency = 128
 # Perform a preflight check for each transaction: true or false
 preflight-check = false
 
@@ -77,7 +77,7 @@ subscribe-to-signatures = true
 # transactions from running, thus significantly decreasinng throughput.
 # If disabled, transaction will reserve concurrency slot only for as long as
 # it's required to receive HTTP response
-enforce-total-sync = false
+enforce-total-sync = true
 
 [data]
 # Data settings for account encoding and size

@@ -22,6 +22,7 @@ pub struct WsWorker<F, V> {
     rx: ShutDownReceiver<Subscription<V>>,
     subscriptions: HashMap<u64, Subscription<V>>,
     inflights: HashMap<u64, Subscription<V>>,
+    lost: HashMap<u64, Payload<'static>>,
     extractor: F,
 }
 
@@ -67,6 +68,7 @@ where
             subscriptions: HashMap::default(),
             inflights: HashMap::default(),
             extractor,
+            lost: HashMap::default(),
         };
 
         tokio::task::spawn_local(this.run());
@@ -79,21 +81,28 @@ where
             result: u64,
             id: u64,
         }
+        let mut count_up = 0;
+        let mut count = 0;
         loop {
             tokio::select! {
                 Ok(frame) = self.ws.read_frame() => {
                     if !matches!(frame.opcode, OpCode::Text) {
                         continue;
                     }
-                    let payload = &*frame.payload;
-                    if let Ok(confirmed) = json::from_slice::<Confirmation>(payload) {
+                    count_up += 1;
+                    let mut payload = frame.payload;
+                    if let Ok(confirmed) = json::from_slice::<Confirmation>(&payload) {
                         let Some(sub) = self.inflights.remove(&confirmed.id) else {
                             continue;
                         };
                         self.subscriptions.insert(confirmed.result, sub);
-                        continue;
+                        if let Some(pl) = self.lost.remove(&confirmed.result) {
+                            payload = pl;
+                        } else {
+                            continue;
+                        }
                     }
-                    let Ok(params) = json::get(payload, ["params"]) else {
+                    let Ok(params) = json::get(&*payload, ["params"]) else {
                         continue;
                     };
                     let Some(id) = params.get("subscription").as_u64() else {
@@ -106,8 +115,10 @@ where
                         continue;
                     };
                     let Some(sub) = self.subscriptions.get(&id) else {
+                        self.lost.insert(id, payload);
                         continue;
                     };
+                    count += 1;
                     if sub.tx.send((sub.id, extracted)).await.is_err() || sub.oneshot {
                         self.subscriptions.remove(&id);
                     }
@@ -129,7 +140,6 @@ where
                 }
             }
         }
-        println!("ws is terminated");
     }
 }
 
@@ -174,7 +184,6 @@ impl<V> ShutDownReceiver<V> {
             return Some(v);
         }
         let _ = self.shutdown.recv().await;
-        println!("received shutdown on ws");
         None
     }
 }

@@ -3,14 +3,41 @@ use json::Serialize;
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchStatistics {
-    configuration: json::Value,
-    http_requests_latency: ObservationsStats,
-    account_update_latency: ObservationsStats,
-    signature_confirmation_latency: ObservationsStats,
-    transactions_per_second: ObservationsStats,
+    pub configuration: json::Value,
+    pub http_requests_latency: ObservationsStats,
+    pub account_update_latency: ObservationsStats,
+    pub signature_confirmation_latency: ObservationsStats,
+    pub transactions_per_second: ObservationsStats,
 }
 
-#[derive(Serialize)]
+impl BenchStatistics {
+    pub fn merge(mut stats: Vec<Self>) -> Self {
+        let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
+
+        let http_requests_latency =
+            ObservationsStats::merge(stats.iter().map(|s| s.http_requests_latency).collect());
+        let account_update_latency =
+            ObservationsStats::merge(stats.iter().map(|s| s.account_update_latency).collect());
+        let signature_confirmation_latency = ObservationsStats::merge(
+            stats
+                .iter()
+                .map(|s| s.signature_confirmation_latency)
+                .collect(),
+        );
+        let transactions_per_second =
+            ObservationsStats::merge(stats.iter().map(|s| s.transactions_per_second).collect());
+
+        BenchStatistics {
+            configuration,
+            http_requests_latency,
+            account_update_latency,
+            signature_confirmation_latency,
+            transactions_per_second,
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub struct ObservationsStats {
     pub count: usize,
@@ -23,7 +50,36 @@ pub struct ObservationsStats {
 }
 
 impl ObservationsStats {
-    pub fn new(mut observations: Vec<u32>) -> Self {
+    pub fn merge(stats: Vec<ObservationsStats>) -> Self {
+        let total_count = stats.len();
+        let sum = stats
+            .iter()
+            .fold((0usize, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32), |acc, stat| {
+                (
+                    acc.0 + stat.count,
+                    acc.1 + stat.median,
+                    acc.2 + stat.min,
+                    acc.3 + stat.max,
+                    acc.4 + stat.avg,
+                    acc.5 + stat.quantile95,
+                    acc.6 + stat.stddev,
+                )
+            });
+
+        ObservationsStats {
+            count: sum.0 / total_count,
+            median: sum.1 / total_count as u32,
+            min: sum.2 / total_count as u32,
+            max: sum.3 / total_count as u32,
+            avg: sum.4 / total_count as u32,
+            quantile95: sum.5 / total_count as u32,
+            stddev: sum.6 / total_count as u32,
+        }
+    }
+}
+
+impl ObservationsStats {
+    pub fn new(mut observations: Vec<u32>, invertedq: bool) -> Self {
         observations.sort();
         let count = observations.len();
         let sum: u64 = observations.iter().map(|&x| x as u64).sum();
@@ -31,7 +87,13 @@ impl ObservationsStats {
         let median = observations[count / 2];
         let min = *observations.first().unwrap();
         let max = *observations.last().unwrap();
-        let quantile95 = observations[(count as f64 * 0.95).ceil() as usize - 1];
+        let q95 = (count as f64 * 0.95).ceil() as usize;
+        let qindex = if invertedq {
+            count.saturating_sub(q95 + 1)
+        } else {
+            q95 - 1
+        };
+        let quantile95 = observations[qindex];
 
         let variance = observations
             .iter()
