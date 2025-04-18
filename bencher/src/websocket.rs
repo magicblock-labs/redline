@@ -81,15 +81,12 @@ where
             result: u64,
             id: u64,
         }
-        let mut count_up = 0;
-        let mut count = 0;
         loop {
             tokio::select! {
                 Ok(frame) = self.ws.read_frame() => {
                     if !matches!(frame.opcode, OpCode::Text) {
                         continue;
                     }
-                    count_up += 1;
                     let mut payload = frame.payload;
                     if let Ok(confirmed) = json::from_slice::<Confirmation>(&payload) {
                         let Some(sub) = self.inflights.remove(&confirmed.id) else {
@@ -118,7 +115,6 @@ where
                         self.lost.insert(id, payload);
                         continue;
                     };
-                    count += 1;
                     if sub.tx.send((sub.id, extracted)).await.is_err() || sub.oneshot {
                         self.subscriptions.remove(&id);
                     }
