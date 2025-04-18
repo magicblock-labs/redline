@@ -65,14 +65,29 @@ this will print out detailed statistics of the benchmarking. `OUTPUT`
 environment variable is optional, if not provided, the last benchmark result
 will be printed
 
+### Run the benchmark and print the report
+```bash
+make bench-report
+```
+
+### Compare benchmark results
+```bash
+make compare <SENSITIVITY=NUM> <THIS=path-to-json-output-file1> <THAT=path-to-json-output-file2>
+```
+print the comparison table between two bench runs, SENSITIVITY is number between 0 and 100 (default is 15), which is used to highlight performance anomalies which exceed this threshold (percentage-wise), THIS and THAT environment variables are optional, and if not provided the last two bench runs will be used.
+
+### Run the benchmark, compare with the previous run, and delete the generated result
+```bash
+make bench-compare
+```
+this can be useful to repeatedly run the benchmark after tweaks, and comparing the results with fixed previous bench run
+
 ### Cleanup
 ```bash
 make clenaup # removes the last benchmark result
 make clean-all # removes results of all previous benchmarks
 ```
 
-### Compare benchmark results
-**TODO**
 
 ## Configuration
 

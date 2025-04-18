@@ -20,6 +20,8 @@ OUTPUT ?=
 report: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) report $(OUTPUT)
 
+bench-report: bench report
+
 prepare: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) prepare $(CONFIG)
 
@@ -37,3 +39,4 @@ SILENT ?= false
 compare: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) compare --sensitivity $(SENSITIVITY) $(THIS) $(THIS)
 
+bench-compare: bench compare cleanup 
