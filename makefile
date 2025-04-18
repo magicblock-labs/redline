@@ -1,4 +1,4 @@
-CONFIG ?= ./config.toml
+CONFIG ?= config.toml
 
 RUN_CMD = @cargo run --release --quiet --bin
 
@@ -15,6 +15,13 @@ report:
 
 prepare:
 	$(RUN_CMD) redline-assist prepare $(CONFIG)
+
+
+cleanup: 
+	$(RUN_CMD) redline-assist cleanup
+
+clean-all: 
+	$(RUN_CMD) redline-assist cleanup -a 
 
 THIS ?=
 THAT ?=

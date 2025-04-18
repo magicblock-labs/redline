@@ -29,10 +29,50 @@ To start using REDLINE, clone the repository to your local environment. Configur
 Once configured, simply run the REDLINE executable with your configuration file to begin the benchmark. REDLINE will handle the rest, providing detailed outputs and statistics upon completion.
 
 ## Usage
+REDLINE has two binaries:
+1. Main `redline` command to run benchmarks and generate statistics
+2. Utility `redline-assist` command to perform some utility functions before or after benchmark
 
+Although you can use them directly, it's more convenient to employ a helper make file to orchestrate the interaction with those binaries.
+
+### Build the binaries
 ```bash
-redline path/to/config.toml
+make build
 ```
+this will build both binaries in release mode
+
+### Prepare the benchmark
+It's recommended (especially after changing benchmark modes) to run the
+preparation script before benchmark, to ensure that all the necessary solana
+accounts are created and delegated 
+```bash
+make prepare <CONFIG=path-to-config>
+```
+this will check that all the accounts to be used in the benchmark are in proper state. `CONFIG` environment variable is optional, `config.toml` will be used if not provided. 
+
+### Run the benchmark
+```bash
+make bench <CONFIG=path-to-config>
+```
+this will run the benchmark with configured parameters. `CONFIG` environment
+variable is optional, `config.toml` will be used if not provided. 
+
+### Print the benchmark report
+```bash
+make report <OUTPUT=path-to-json-output-file>
+```
+this will print out detailed statistics of the benchmarking. `OUTPUT`
+environment variable is optional, if not provided, the last benchmark result
+will be printed
+
+### Cleanup
+```bash
+make clenaup # removes the last benchmark result
+make clean-all # removes results of all previous benchmarks
+```
+
+### Compare benchmark results
+**TODO**
 
 ## Configuration
 

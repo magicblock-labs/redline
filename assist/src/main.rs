@@ -10,7 +10,7 @@ async fn main() -> BenchResult<()> {
     match cmd {
         AssistCommand::Prepare { config } => prepare::prepare(config).await?,
         AssistCommand::Report { results } => report::report(results)?,
-        AssistCommand::Cleanup { all } => cleanup::cleanup(all)?,
+        AssistCommand::Cleanup { all } => cleanup::cleanup(all),
         AssistCommand::Compare {
             sensitivity,
             silent,
