@@ -1,4 +1,5 @@
 /target
 redline.json
-program/fixtures/redline-keypair.json
+/program/fixtures/redline-keypair.json
+/runs
 

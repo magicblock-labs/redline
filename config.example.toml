@@ -17,7 +17,13 @@ ws-connections-count = 2
 [benchmark]
 # Number of iterations for the benchmark
 iterations = 10000
-# Transactions per second to target
+# The desired throughput for transaction submission to the target ER node,
+# expressed in transactions per second. 
+# Note: This serves as a hint rather than a strict limit. For instance,
+# specifying a rate of 10,000 TPS while the ER node's transaction ingestion
+# rate is 3,000 TPS will not increase the validator's capacity to handle the
+# specified throughput. Consequently, any value exceeding the validator's
+# saturation point is ineffective.
 tps = 1000
 # Number of concurrent executions
 concurrency = 128

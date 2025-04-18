@@ -1,6 +1,7 @@
-use std::{rc::Rc, thread::JoinHandle};
+use std::{fs::File, path::PathBuf, rc::Rc, thread::JoinHandle, time::SystemTime};
 
 use core::{BenchResult, Config};
+use json::writer::BufferedWriter;
 use keypair::Keypair;
 use runner::BenchRunner;
 use signer::EncodableKey;
@@ -38,7 +39,21 @@ fn main() -> BenchResult<()> {
         .collect::<std::thread::Result<_>>()
         .expect("failed to join tokio runtime for bencher");
     let stats = BenchStatistics::merge(stats);
-    println!("{}", json::to_string_pretty(&stats).unwrap());
+    let output = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+    let outdir = PathBuf::from("runs");
+    let _ = std::fs::create_dir(&outdir);
+    let output = outdir.join(format!("redline-{:0>12}.json", output.as_secs()));
+    let writer = File::options()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&output)
+        .map(BufferedWriter::new)?;
+    json::to_writer(output, &stats)?;
+    println!(
+        "The results of the benchmark are written to {}",
+        output.display()
+    );
     Ok(())
 }
 

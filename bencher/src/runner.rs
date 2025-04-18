@@ -144,7 +144,7 @@ impl BenchRunner {
             self.step(i).await;
         }
         println!(
-            "benchmark run is complete, transaction sent: {}",
+            "The Benchmark run is complete, number of transaction sent: {}",
             self.iterations
         );
 
