@@ -1,4 +1,4 @@
-use core::BenchMode;
+use core::types::BenchMode;
 use std::time::{Duration, Instant};
 
 use hash::Hash;

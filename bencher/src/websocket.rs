@@ -1,4 +1,4 @@
-use core::{ConnectionSettings, Url};
+use core::{config::ConnectionSettings, types::Url};
 use std::collections::HashMap;
 
 use fastwebsockets::{handshake, CloseCode, Frame, OpCode, Payload, WebSocket};

@@ -1,11 +1,10 @@
+use core::stats::ObservationsStats;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-
-use crate::stats::ObservationsStats;
 
 const ONESEC: Duration = Duration::from_secs(1);
 const ONEMS: Duration = Duration::from_millis(1);

@@ -13,7 +13,7 @@ pub enum AssistCommand {
     Report {
         /// Benchmark results, JSON file
         #[structopt(parse(from_os_str))]
-        results: std::path::PathBuf,
+        results: Option<std::path::PathBuf>,
     },
     /// Compare results of two different benchmark runs, inputs are JSON file results
     Compare {

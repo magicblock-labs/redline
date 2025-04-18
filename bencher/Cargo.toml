@@ -27,7 +27,7 @@ hash = { package = "solana-hash", version = "2.2" }
 program = { path = "../program", package = "redline-program" }
 core = { path = "../core", package = "redline-core" }
 
-json = { package = "sonic-rs", version = "0.5" }
+json = { workspace = true }
 serde = { workspace = true }
 bincode = { workspace = true }
 bs58 = "0.5"

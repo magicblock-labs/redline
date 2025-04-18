@@ -1,0 +1,67 @@
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::types::{AccountEncoding, AccountSize, BenchMode, BenchResult, ConnectionType, Url};
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct Config {
+    #[serde(skip_serializing)]
+    pub connection: ConnectionSettings,
+    pub benchmark: BenchmarkSettings,
+    pub subscription: SubscriptionSettings,
+    pub data: DataSettings,
+}
+
+impl Config {
+    pub fn from_path(path: PathBuf) -> BenchResult<Self> {
+        let config = std::fs::read_to_string(path)?;
+        toml::from_str(&config).map_err(Into::into)
+    }
+    pub fn from_args() -> BenchResult<Self> {
+        let path = std::env::args()
+            .nth(1)
+            .ok_or("usage: redline config.toml")?
+            .into();
+        Self::from_path(path)
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct ConnectionSettings {
+    #[serde(skip_serializing)]
+    pub chain_url: Url,
+    #[serde(skip_serializing)]
+    pub ephem_url: Url,
+    pub http_connection_type: ConnectionType,
+    pub http_connections_count: usize,
+    pub ws_connections_count: usize,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct BenchmarkSettings {
+    pub iterations: u64,
+    pub tps: u32,
+    pub concurrency: usize,
+    pub preflight_check: bool,
+    pub parallelism: u8,
+    pub mode: BenchMode,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct SubscriptionSettings {
+    pub subscribe_to_accounts: bool,
+    pub subscribe_to_signatures: bool,
+    pub enforce_total_sync: bool,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct DataSettings {
+    pub account_encoding: AccountEncoding,
+    pub account_size: AccountSize,
+}

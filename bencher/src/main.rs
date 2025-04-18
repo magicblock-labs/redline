@@ -1,11 +1,10 @@
+use core::{config::Config, stats::BenchStatistics, types::BenchResult};
 use std::{fs::File, path::PathBuf, rc::Rc, thread::JoinHandle, time::SystemTime};
 
-use core::{BenchResult, Config};
 use json::writer::BufferedWriter;
 use keypair::Keypair;
 use runner::BenchRunner;
 use signer::EncodableKey;
-use stats::BenchStatistics;
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 
 fn main() -> BenchResult<()> {
@@ -84,7 +83,6 @@ mod extractor;
 mod http;
 mod payload;
 mod runner;
-mod stats;
 mod tps;
 mod transaction;
 mod websocket;

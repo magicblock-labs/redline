@@ -1,8 +1,8 @@
+use core::types::AccountEncoding;
+
 use base64::{prelude::BASE64_STANDARD, Engine};
 use pubkey::Pubkey;
 use transaction::Transaction;
-
-use core::AccountEncoding;
 
 pub fn airdrop(pubkey: Pubkey, amount: u64) -> String {
     format!(

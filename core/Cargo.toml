@@ -12,5 +12,6 @@ keywords.workspace = true
 
 [dependencies]
 serde = { workspace = true }
+json = { workspace = true }
 hyper = { workspace = true }
 toml = "0.8"

@@ -1,3 +1,4 @@
+use core::stats::ObservationsStats;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Instant};
 
 use tokio::sync::{
@@ -5,7 +6,7 @@ use tokio::sync::{
     oneshot,
 };
 
-use crate::{stats::ObservationsStats, ShutDownListener};
+use crate::ShutDownListener;
 
 pub type ConfirmationsDB<V> = Rc<RefCell<Confirmations<V>>>;
 type ConfirmationSender<V> = Sender<(u64, V)>;

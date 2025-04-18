@@ -1,6 +1,6 @@
-use json::Serialize;
+use json::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct BenchStatistics {
     pub configuration: json::Value,
@@ -37,7 +37,7 @@ impl BenchStatistics {
     }
 }
 
-#[derive(Serialize, Clone, Copy)]
+#[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub struct ObservationsStats {
     pub count: usize,

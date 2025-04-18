@@ -1,3 +1,5 @@
 use std::path::PathBuf;
 
-pub fn compare(this: PathBuf, that: PathBuf) {}
+pub fn compare(_this: PathBuf, _that: PathBuf) {
+    todo!()
+}

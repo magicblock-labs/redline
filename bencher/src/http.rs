@@ -1,3 +1,5 @@
+use core::config::ConnectionSettings;
+use core::types::{ConnectionType, Url};
 use std::collections::VecDeque;
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
@@ -14,7 +16,6 @@ use json::LazyValue;
 use tokio::net::TcpStream;
 
 use crate::BenchResult;
-use core::{ConnectionSettings, ConnectionType, Url};
 
 pub enum InnerConnection {
     Http1(Http1Sender<String>),

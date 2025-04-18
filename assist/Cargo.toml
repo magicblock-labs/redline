@@ -22,7 +22,9 @@ systransaction = { package = "solana-system-transaction", version = "2.2" }
 
 
 structopt = "0.3"
+json = { workspace = true }
 bincode = { workspace = true }
+prettytable = { version = "0.10", default-features = false }
 
 tokio = { workspace = true }
 

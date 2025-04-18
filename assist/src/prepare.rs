@@ -1,4 +1,8 @@
-use core::{BenchMode, BenchResult, Config};
+use core::{
+    config::Config,
+    consts::KEYPAIRS_PATH,
+    types::{BenchMode, BenchResult},
+};
 use std::path::PathBuf;
 
 use commitment::CommitmentConfig;
@@ -26,9 +30,9 @@ struct Preparator {
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
     let config = Config::from_path(path)?;
     let keypairs: Vec<_> = (1..=config.benchmark.parallelism)
-        .map(|n| Keypair::read_from_file(format!("keypairs/{n:>03}.json")))
+        .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n:>03}.json")))
         .collect::<BenchResult<_>>()?;
-    let vault = Keypair::read_from_file("keypairs/vault.json")?;
+    let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))?;
     let client = RpcClient::new(config.connection.chain_url.0.to_string());
     let preparator = Preparator {
         config,

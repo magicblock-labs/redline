@@ -1,4 +1,4 @@
-use core::Config;
+use core::{config::Config, stats::BenchStatistics};
 use std::{hint::black_box, rc::Rc, time::Duration};
 
 use hyper::Request;
@@ -14,7 +14,6 @@ use crate::{
     },
     http::{Connection, ConnectionPool},
     payload,
-    stats::BenchStatistics,
     tps::TpsManager,
     transaction::TransactionProvider,
     websocket::{Subscription, WebsocketPool},

@@ -1,4 +1,4 @@
-use core::BenchResult;
+use core::types::BenchResult;
 
 use args::AssistCommand;
 use structopt::StructOpt;
@@ -8,7 +8,7 @@ async fn main() -> BenchResult<()> {
     let cmd = AssistCommand::from_args();
     match cmd {
         AssistCommand::Prepare { config } => prepare::prepare(config).await?,
-        AssistCommand::Report { results } => report::report(results),
+        AssistCommand::Report { results } => report::report(results)?,
         AssistCommand::Compare { this, that } => compare::compare(this, that),
     }
     Ok(())
