@@ -17,7 +17,7 @@ use crate::{
     tps::TpsManager,
     transaction::TransactionProvider,
     websocket::{Subscription, WebsocketPool},
-    BenchResult, ShutDown,
+    BenchResult, ShutDown, ShutDownSender,
 };
 
 pub struct BenchRunner {
@@ -43,7 +43,7 @@ pub struct BenchRunner {
     subscribe_to_signatures: bool,
     enforce_total_sync: bool,
 
-    _shutdown: ShutDown,
+    shutdown: ShutDown,
 }
 
 impl BenchRunner {
@@ -58,13 +58,14 @@ impl BenchRunner {
             config.connection.http_connection_type,
         )
         .await?;
-        let blockhash = BlockHashProvider::new(ephem)
+        let shutdown = ShutDownSender::init();
+
+        let blockhash = BlockHashProvider::new(ephem, shutdown.listener())
             .await
             .inspect_err(|err| eprintln!("failed to create blockhash provider: {err}"))?;
         let ephem = ConnectionPool::new(&config.connection).await?;
 
         let tps_manager = TpsManager::new(config.benchmark.concurrency, config.benchmark.tps);
-        let shutdown = ShutDown::default();
 
         let signatures_websocket = WebsocketPool::new(
             &config.connection,
@@ -73,11 +74,11 @@ impl BenchRunner {
         )
         .await?;
 
-        let account_updates_confirmer = EventConfirmer::new();
+        let account_updates_confirmer = EventConfirmer::new(shutdown.listener());
         let account_confirmations = account_updates_confirmer.db.clone();
         tokio::task::spawn_local(account_updates_confirmer.confirm_by_value());
 
-        let signatures_confirmer = EventConfirmer::new();
+        let signatures_confirmer = EventConfirmer::new(shutdown.listener());
         let signature_confirmations = signatures_confirmer.db.clone();
         tokio::task::spawn_local(signatures_confirmer.confirm_by_id());
 
@@ -130,7 +131,7 @@ impl BenchRunner {
             subscribe_to_signatures: config.subscription.subscribe_to_signatures,
             enforce_total_sync: config.subscription.enforce_total_sync,
             preflight_check: config.benchmark.preflight_check,
-            _shutdown: shutdown,
+            shutdown,
         })
     }
 
@@ -139,6 +140,10 @@ impl BenchRunner {
             self.transaction_provider.bookkeep(&mut self.chain, i);
             self.step(i).await;
         }
+        println!(
+            "benchmark run is complete, transaction sent: {}",
+            self.iterations
+        );
         ConfirmationsBundle {
             accounts_updates: self.account_confirmations,
             signature_confirmations: self.signature_confirmations,
@@ -191,10 +196,11 @@ impl BenchRunner {
         let delivery = self.delivery_confirmations.clone();
         delivery.borrow_mut().track(id, None);
 
+        let shutdown = self.shutdown.clone();
         let task = async move {
             match response.resolve().await {
-                Ok(Some(true)) => {
-                    eprintln!("transaction failed to executed");
+                Ok(Some(false)) => {
+                    eprintln!("transaction failed to be executed");
                 }
                 Err(err) => {
                     eprintln!("transaction failed to be delivered: {err}");
@@ -211,6 +217,7 @@ impl BenchRunner {
             if let Some(rx) = signature_rx {
                 let _ = rx.await;
             }
+            drop(shutdown)
         };
         tokio::task::spawn_local(task);
     }

@@ -35,7 +35,7 @@ impl TpsManager {
             self.count = 0;
         }
         self.count += 1;
-        let remaining = (self.tps - self.count).min(1) as u64;
+        let remaining = (self.tps - self.count).max(1) as u64;
         let lag =
             Duration::from_millis(1000u64.saturating_sub(elapsed.as_millis() as u64) / remaining);
         if lag >= ONEMS {

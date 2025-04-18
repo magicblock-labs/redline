@@ -1,10 +1,10 @@
-use std::{ops::Deref, rc::Rc};
+use std::rc::Rc;
 
 use core::{BenchResult, Config};
 use keypair::Keypair;
 use runner::BenchRunner;
 use signer::EncodableKey;
-use tokio::{runtime, sync::Notify, task::LocalSet};
+use tokio::{runtime, sync::broadcast, task::LocalSet};
 
 fn main() -> BenchResult<()> {
     let config = Config::from_args()?;
@@ -37,20 +37,25 @@ fn main() -> BenchResult<()> {
     Ok(())
 }
 
-#[derive(Default)]
-struct ShutDownInner(Notify);
-type ShutDown = Rc<ShutDownInner>;
+struct ShutDownSender(broadcast::Sender<()>);
+type ShutDownListener = broadcast::Receiver<()>;
+type ShutDown = Rc<ShutDownSender>;
 
-impl Drop for ShutDownInner {
+impl Drop for ShutDownSender {
     fn drop(&mut self) {
-        self.0.notify_waiters();
+        println!("shutting everything down");
+        let _ = self.0.send(());
     }
 }
 
-impl Deref for ShutDownInner {
-    type Target = Notify;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl ShutDownSender {
+    fn init() -> ShutDown {
+        let (tx, _) = broadcast::channel(1);
+        Rc::new(Self(tx))
+    }
+
+    fn listener(&self) -> ShutDownListener {
+        self.0.subscribe()
     }
 }
 

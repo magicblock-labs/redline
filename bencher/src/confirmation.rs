@@ -5,7 +5,7 @@ use tokio::sync::{
     oneshot,
 };
 
-use crate::stats::ObservationsStats;
+use crate::{stats::ObservationsStats, ShutDownListener};
 
 pub type ConfirmationsDB<V> = Rc<RefCell<Confirmations<V>>>;
 type ConfirmationSender<V> = Sender<(u64, V)>;
@@ -27,26 +27,43 @@ pub struct PendingConfirmation<V> {
 pub struct EventConfirmer<V> {
     pub db: ConfirmationsDB<V>,
     rx: ConfirmationReceiver<V>,
+    shutdown: ShutDownListener,
 }
 
 impl<V> EventConfirmer<V> {
-    pub fn new() -> Self {
+    pub fn new(shutdown: ShutDownListener) -> Self {
         let (db, rx) = Confirmations::new();
-        Self { db, rx }
+        Self { db, rx, shutdown }
     }
 
     pub async fn confirm_by_id(mut self) {
-        while let Some((id, v)) = self.rx.recv().await {
-            self.db.borrow_mut().observe(id, v);
+        loop {
+            tokio::select! {
+                Some((id, v)) = self.rx.recv() => {
+                    self.db.borrow_mut().observe(id, v);
+                },
+                _ = self.shutdown.recv() => {
+                    break;
+                },
+            }
         }
+        println!("event confirmer has terminated id")
     }
 }
 
 impl EventConfirmer<u64> {
     pub async fn confirm_by_value(mut self) {
-        while let Some((_, id)) = self.rx.recv().await {
-            self.db.borrow_mut().observe(id, id);
+        loop {
+            tokio::select! {
+                Some((_, id)) = self.rx.recv() => {
+                    self.db.borrow_mut().observe(id, id);
+                },
+                _ = self.shutdown.recv() => {
+                    break;
+                },
+            }
         }
+        println!("event confirmer has terminated value")
     }
 }
 

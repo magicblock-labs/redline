@@ -1,7 +1,7 @@
 use core::{ConnectionSettings, Url};
 use std::collections::HashMap;
 
-use fastwebsockets::{handshake, Frame, OpCode, Payload, WebSocket};
+use fastwebsockets::{handshake, CloseCode, Frame, OpCode, Payload, WebSocket};
 use http_body_util::Empty;
 use hyper::{
     header::{CONNECTION, UPGRADE},
@@ -15,7 +15,7 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use crate::{BenchResult, ShutDown};
+use crate::{BenchResult, ShutDown, ShutDownListener};
 
 pub struct WsWorker<F, V> {
     ws: WebSocket<TokioIo<Upgraded>>,
@@ -45,7 +45,7 @@ where
     async fn init(
         url: &Url,
         extractor: F,
-        shutdown: ShutDown,
+        shutdown: ShutDownListener,
     ) -> BenchResult<Sender<Subscription<V>>> {
         let stream = TcpStream::connect(url.address(true)).await?;
         let req = Request::builder()
@@ -112,7 +112,12 @@ where
                         self.subscriptions.remove(&id);
                     }
                 }
-                Some(mut sub) = self.rx.recv() => {
+                sub = self.rx.recv() => {
+                    let Some(mut sub) = sub else {
+                        let _ = self.ws
+                            .write_frame(Frame::close(CloseCode::Normal.into(), b"")).await;
+                        break;
+                    };
                     let payload = Payload::Owned(std::mem::take(&mut sub.payload).into_bytes());
                     // TODO: reconnect on error
                     self.ws
@@ -122,11 +127,9 @@ where
                     self.ws.flush().await.expect("failed to flush ws stream");
                     self.inflights.insert(sub.id, sub);
                 }
-                else => {
-                    break;
-                }
             }
         }
+        println!("ws is terminated");
     }
 }
 
@@ -143,7 +146,8 @@ impl<V> WebsocketPool<V> {
         let count = config.ws_connections_count;
         let mut connections = Vec::with_capacity(count);
         for _ in 0..count {
-            let tx = WsWorker::init(&config.ephem_url, extractor.clone(), shutdown.clone()).await?;
+            let tx =
+                WsWorker::init(&config.ephem_url, extractor.clone(), shutdown.listener()).await?;
             connections.push(tx);
         }
         Ok(Self {
@@ -161,7 +165,7 @@ impl<V> WebsocketPool<V> {
 
 struct ShutDownReceiver<V> {
     rx: Receiver<V>,
-    shutdown: ShutDown,
+    shutdown: ShutDownListener,
 }
 
 impl<V> ShutDownReceiver<V> {
@@ -169,7 +173,8 @@ impl<V> ShutDownReceiver<V> {
         if let Some(v) = self.rx.recv().await {
             return Some(v);
         }
-        self.shutdown.notified().await;
+        let _ = self.shutdown.recv().await;
+        println!("received shutdown on ws");
         None
     }
 }

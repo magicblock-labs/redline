@@ -7,22 +7,22 @@ chain-url = "http://api.devnet.solana.com"
 # URL of the ephemeral node to connect to
 ephem-url = "http://127.0.0.1:8899"
 # Type of HTTP connection: "http1" or "http2"
-http-connection-type = "http1"
+http-connection-type = "http2"
 # Maximum number of HTTP connections
-http-connections-count = 10
+http-connections-count = 128
 # Maximum number of WebSocket connections
 ws-connections-count = 5
 
 # Benchmark settings
 [benchmark]
 # Number of iterations for the benchmark
-iterations = 15000
+iterations = 200
 # Transactions per second to target
-tps = 100
+tps = 200
 # Number of concurrent executions
-concurrency = 16
+concurrency = 4
 # Perform a preflight check for each transaction: true or false
-preflight-check = true
+preflight-check = false
 
 # Inidicates how many concurrent benchmarks to run
 # 

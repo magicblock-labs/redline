@@ -29,8 +29,7 @@ pub fn signature_response_extractor(value: LazyValue) -> Option<bool> {
 pub fn signature_status_extractor(value: LazyValue) -> Option<bool> {
     let value = value.get("value")?;
 
-    let errored = value.get("err").map(|e| !e.is_null())?;
-    Some(errored)
+    value.get("err").map(|e| e.is_null())
 }
 
 pub fn blockhash_extractor(value: LazyValue) -> Option<Hash> {
