@@ -28,7 +28,7 @@ To start using REDLINE, clone the repository to your local environment. Configur
 
 Once configured, simply run the REDLINE executable with your configuration file to begin the benchmark. REDLINE will handle the rest, providing detailed outputs and statistics upon completion.
 
-## Usage Example
+## Usage
 
 ```bash
 redline path/to/config.toml

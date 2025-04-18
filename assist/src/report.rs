@@ -1,28 +1,19 @@
 use std::{fs, path::PathBuf};
 
-use core::{consts::RUNS_OUTPUT_PATH, stats::BenchStatistics, types::BenchResult};
+use core::{stats::BenchStatistics, types::BenchResult};
 
 use json::JsonContainerTrait;
 use prettytable::{Cell, Row, Table};
 
+use crate::latest_run_output_path;
+
 pub fn report(path: Option<PathBuf>) -> BenchResult<()> {
-    let path = path.unwrap_or_else(latest_output_path);
+    let path = path.unwrap_or_else(|| latest_run_output_path(1));
     let output = fs::read_to_string(path)?;
     let stats: BenchStatistics = json::from_str(&output)?;
 
     print_stats_pretty(&stats);
     Ok(())
-}
-
-fn latest_output_path() -> PathBuf {
-    let dir = fs::read_dir(RUNS_OUTPUT_PATH)
-        .inspect_err(|err| eprintln!("failed to read output directory for benchmark runs: {err}"))
-        .unwrap();
-    let mut outputs: Vec<_> = dir.filter_map(|e| e.map(|e| e.path()).ok()).collect();
-    outputs.sort();
-    outputs
-        .pop()
-        .expect("benchmark runs output directory should have at least one entry")
 }
 
 macro_rules! add_stats_row {
@@ -44,8 +35,8 @@ fn print_stats_pretty(stats: &BenchStatistics) {
     let mut table = Table::new();
 
     table.add_row(Row::new(vec![
-        Cell::new("Configuration Key"),
-        Cell::new("Value"),
+        Cell::new("Configuration"),
+        Cell::new("Values"),
     ]));
 
     if let Some(obj) = stats.configuration.as_object() {
@@ -74,23 +65,15 @@ fn print_stats_pretty(stats: &BenchStatistics) {
         Cell::new("Min"),
         Cell::new("Max"),
         Cell::new("Avg"),
-        Cell::new("95th Percentile"),
+        Cell::new("95th Perc"),
         Cell::new("Stddev"),
     ]));
 
+    add_stats_row!(table, "HTTP Requests (μs)", stats.http_requests_latency);
+    add_stats_row!(table, "Account Update (μs)", stats.account_update_latency);
     add_stats_row!(
         table,
-        "HTTP Requests Latency (μs)",
-        stats.http_requests_latency
-    );
-    add_stats_row!(
-        table,
-        "Account Update Latency (μs)",
-        stats.account_update_latency
-    );
-    add_stats_row!(
-        table,
-        "Signature Confirmation Latency (μs)",
+        "Signature Confirmation (μs)",
         stats.signature_confirmation_latency
     );
     add_stats_row!(

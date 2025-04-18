@@ -7,7 +7,6 @@ use crate::types::{AccountEncoding, AccountSize, BenchMode, BenchResult, Connect
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
-    #[serde(skip_serializing)]
     pub connection: ConnectionSettings,
     pub benchmark: BenchmarkSettings,
     pub subscription: SubscriptionSettings,
