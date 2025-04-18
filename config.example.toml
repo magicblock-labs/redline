@@ -11,12 +11,12 @@ http-connection-type = "http2"
 # Maximum number of HTTP connections
 http-connections-count = 16
 # Maximum number of WebSocket connections
-ws-connections-count = 2
+ws-connections-count = 16
 
 # Benchmark settings
 [benchmark]
 # Number of iterations for the benchmark
-iterations = 10000
+iterations = 100000
 # The desired throughput for transaction submission to the target ER node,
 # expressed in transactions per second. 
 # Note: This serves as a hint rather than a strict limit. For instance,
@@ -24,9 +24,9 @@ iterations = 10000
 # rate is 3,000 TPS will not increase the validator's capacity to handle the
 # specified throughput. Consequently, any value exceeding the validator's
 # saturation point is ineffective.
-tps = 1000
+tps = 3000
 # Number of concurrent executions
-concurrency = 128
+concurrency = 64
 # Perform a preflight check for each transaction: true or false
 preflight-check = false
 
