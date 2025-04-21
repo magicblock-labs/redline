@@ -30,7 +30,7 @@ impl TpsManager {
     }
     pub async fn tick(&mut self) -> OwnedSemaphorePermit {
         let elapsed = self.epoch.elapsed();
-        if elapsed >= ONESEC {
+        if elapsed > ONESEC {
             self.epoch = Instant::now();
             if self.count > 0 {
                 self.observations.push(self.count);

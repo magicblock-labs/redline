@@ -4,6 +4,7 @@ use std::fs;
 use crate::latest_run_output_path;
 
 pub fn cleanup(all: bool) {
+    println!("cleanup is invoked");
     if all {
         let _ = fs::remove_dir_all(RUNS_OUTPUT_PATH);
         return;

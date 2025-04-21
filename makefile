@@ -1,15 +1,15 @@
-SRC := $(find bencher assist core -type f -name '*.rs')
-
 CONFIG ?= config.toml
 
 TARGET_DIR = target/release
 REDLINE=$(TARGET_DIR)/redline
 REDLINE_ASSIST=$(TARGET_DIR)/redline-assist
 
+remove-artifacts:
+	rm $(REDLINE) $(REDLINE_ASSIST)
 
-build: $(REDLINE) $(REDLINE_ASSIST)
+build: remove-artifacts $(REDLINE) $(REDLINE_ASSIST)
 
-$(REDLINE) $(REDLINE_ASSIST): $(SRC)
+$(REDLINE) $(REDLINE_ASSIST):
 	@cargo build --release --bins
 
 bench: $(REDLINE)
@@ -25,7 +25,7 @@ bench-report: bench report
 prepare: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) prepare $(CONFIG)
 
-cleanup: $(REDLINE_ASSIST)
+clean: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) cleanup
 
 clean-all: $(REDLINE_ASSIST)
@@ -39,4 +39,4 @@ SILENT ?= false
 compare: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) compare --sensitivity $(SENSITIVITY) $(THIS) $(THIS)
 
-bench-compare: bench compare cleanup 
+bench-compare: bench compare clean

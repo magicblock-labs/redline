@@ -6,6 +6,7 @@ use prettytable::{
     format::Alignment,
     Attr,
 };
+use prettytable::{Cell, Row, Table};
 
 use crate::latest_run_output_path;
 
@@ -28,7 +29,6 @@ pub fn compare(
 
     let this: BenchStatistics = json::from_str(&fs::read_to_string(this)?)?;
     let that: BenchStatistics = json::from_str(&fs::read_to_string(that)?)?;
-    use prettytable::{Cell, Row, Table};
 
     let mut table = Table::new();
 
@@ -37,34 +37,43 @@ pub fn compare(
             "Request Latency",
             &this.http_requests_latency,
             &that.http_requests_latency,
+            1.0f64,
         ),
         (
             "Account Update",
             &this.account_update_latency,
             &that.account_update_latency,
+            1.0,
         ),
         (
             "Signature Confirmation",
             &this.signature_confirmation_latency,
             &that.signature_confirmation_latency,
+            1.0,
         ),
         (
             "TPS",
             &this.transactions_per_second,
             &that.transactions_per_second,
+            -1.0,
         ),
     ];
 
     let mut regression_detected = false;
-    for (name, this_stats, that_stats) in metrics {
+    for (name, this_stats, that_stats, modifier) in metrics {
         let comparisons = vec![
-            ("Median", this_stats.median, that_stats.median, 1.0),
-            ("Q95", this_stats.quantile95, that_stats.quantile95, 1.0),
-            ("Average", this_stats.avg, that_stats.avg, -1.0),
+            ("Median", this_stats.median, that_stats.median),
+            ("Q95", this_stats.quantile95, that_stats.quantile95),
+            ("Average", this_stats.avg, that_stats.avg),
         ];
 
-        for (stat_name, this_value, that_value, modifier) in comparisons {
-            let diff = (this_value - that_value) as f64 / this_value as f64 * 100.0 * modifier;
+        for (stat_name, this_value, that_value) in comparisons {
+            let denominator = if modifier.is_sign_positive() {
+                this_value.min(that_value)
+            } else {
+                this_value.max(that_value)
+            };
+            let diff = (this_value - that_value) as f64 / denominator as f64 * 100.0 * modifier;
             let mut cell = Cell::new_align(&format!("{diff:>+03.1}%",), Alignment::RIGHT);
             if diff.abs() > sensitivity && diff.is_sign_positive() {
                 cell.style(Attr::ForegroundColor(RED));
