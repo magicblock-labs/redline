@@ -82,6 +82,9 @@ pub fn compare(
                 cell,
             ]));
         }
+        if name != "TPS" {
+            table.add_empty_row();
+        }
     }
 
     if !silent || regression_detected {
