@@ -32,7 +32,7 @@ pub enum BenchMode {
 #[serde(rename_all = "kebab-case")]
 pub enum ConnectionType {
     Http1,
-    Http2,
+    Http2 { streams: u32 },
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy)]

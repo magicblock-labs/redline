@@ -6,8 +6,8 @@
 chain-url = "http://api.devnet.solana.com"
 # URL of the ephemeral node to connect to
 ephem-url = "http://127.0.0.1:8899"
-# Type of HTTP connection: "http1" or "http2"
-http-connection-type = "http2"
+# Type of HTTP connection: "http1" or "{ http2 = { streams = <NUM> } }"
+http-connection-type = { http2 = { streams = 128 } }
 # Maximum number of HTTP connections
 http-connections-count = 16
 # Maximum number of WebSocket connections
@@ -50,13 +50,13 @@ mode = "simple-byte-set"
 # every clone-frequency-secs, and airdrop will be performed on of the readonly
 # accounts on chain, thus triggering clone of account on ER 
 
-# mode = { "trigger-clones" = { clone-frequency-secs = 1, accounts-count = 16 } }
+# mode = { trigger-clones = { clone-frequency-secs = 1, accounts-count = 16 } }
 
 #--------------------------------------------------------------------------------
 # performs an expensive hash compute in loop (iters times), 28 iterations
 # consume almost the entirety of 200K CUs
 
-# mode = { "high-cu-cost" = { iters = 8 } }
+# mode = { high-cu-cost = { iters = 8 } }
 
 #--------------------------------------------------------------------------------
 # performs data copy operation between accounts in the pool, each transaction
@@ -64,12 +64,12 @@ mode = "simple-byte-set"
 # transactions using intersecting set of accounts will create pressure on
 # scheduler due to account locking
 
-# mode = { "read-write" = { accounts-pool-size = 32 } }
+# mode = { read-write = { accounts-pool-size = 32 } }
 
 #--------------------------------------------------------------------------------
 # a combination of various benchmarking modes, to simulate more real world scenarios
 
-# mode = { "mixed" = [ { "simple-byte-set" }, { "high-cu-cost" = { iters = 28 } } ] }
+# mode = { mixed = [ "simple-byte-set", { high-cu-cost = { iters = 28 } } ] }
 
 [subscription]
 # Subscription settings

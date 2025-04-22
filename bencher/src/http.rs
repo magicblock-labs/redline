@@ -99,6 +99,7 @@ impl Connection {
 impl Connection {
     pub async fn new(url: &Url, ty: ConnectionType) -> BenchResult<Self> {
         let stream = TcpStream::connect(url.address(false)).await?;
+        stream.set_nodelay(true).expect("failed to set TCP nodelay");
 
         let io = TokioIo::new(stream);
 
@@ -108,9 +109,11 @@ impl Connection {
                 tokio::task::spawn_local(con);
                 InnerConnection::Http1(sender)
             }
-            ConnectionType::Http2 => {
-                let (sender, con) =
-                    hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await?;
+            ConnectionType::Http2 { streams } => {
+                let (sender, con) = hyper::client::conn::http2::Builder::new(TokioExecutor::new())
+                    .max_concurrent_streams(streams)
+                    .handshake(io)
+                    .await?;
                 tokio::task::spawn_local(con);
                 InnerConnection::Http2(sender)
             }

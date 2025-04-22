@@ -53,25 +53,26 @@ pub struct ObservationsStats {
 impl ObservationsStats {
     pub fn merge(stats: Vec<ObservationsStats>) -> Self {
         let total_count = stats.len();
-        let sum = stats
-            .iter()
-            .fold((0usize, 0i32, 0u32, 0u32, 0i32, 0i32, 0u32), |acc, stat| {
+        let sum = stats.iter().fold(
+            (0usize, 0i32, u32::MAX, 0u32, 0i32, 0i32, 0u32),
+            |acc, stat| {
                 (
                     acc.0 + stat.count,
                     acc.1 + stat.median,
-                    acc.2 + stat.min,
-                    acc.3 + stat.max,
+                    acc.2.min(stat.min),
+                    acc.3.max(stat.max),
                     acc.4 + stat.avg,
                     acc.5 + stat.quantile95,
                     acc.6 + stat.stddev,
                 )
-            });
+            },
+        );
 
         ObservationsStats {
-            count: sum.0 / total_count,
+            count: sum.0,
             median: sum.1 / total_count as i32,
-            min: sum.2 / total_count as u32,
-            max: sum.3 / total_count as u32,
+            min: sum.2,
+            max: sum.3,
             avg: sum.4 / total_count as i32,
             quantile95: sum.5 / total_count as i32,
             stddev: sum.6 / total_count as u32,
