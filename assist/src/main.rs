@@ -29,7 +29,6 @@ fn latest_run_output_path(mut count: usize) -> PathBuf {
         .filter_map(|e| e.map(|e| e.path()).ok().filter(|p| p.is_file()))
         .collect();
     outputs.sort();
-    println!("outputs: {outputs:?}");
     loop {
         let path = outputs
             .pop()
@@ -38,7 +37,6 @@ fn latest_run_output_path(mut count: usize) -> PathBuf {
         if count > 0 {
             continue;
         }
-        println!("removed: {:?}", path);
         break path;
     }
 }
