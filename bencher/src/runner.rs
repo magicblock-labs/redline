@@ -25,7 +25,7 @@ pub struct BenchRunner {
     blockhash: BlockHashProvider,
     signer: Keypair,
 
-    //chain: Connection,
+    chain: Connection,
     ephem: ConnectionPool,
 
     signatures_websocket: WebsocketPool<bool>,
@@ -49,11 +49,11 @@ pub struct BenchRunner {
 
 impl BenchRunner {
     pub async fn new(signer: Keypair, config: Config) -> BenchResult<Self> {
-        //let chain = Connection::new(
-        //    &config.connection.chain_url,
-        //    config.connection.http_connection_type,
-        //)
-        //.await?;
+        let chain = Connection::new(
+            &config.connection.chain_url,
+            config.connection.http_connection_type,
+        )
+        .await?;
         let ephem = Connection::new(
             &config.connection.ephem_url,
             config.connection.http_connection_type,
@@ -120,7 +120,7 @@ impl BenchRunner {
             transaction_provider,
             blockhash,
             signer,
-            //chain,
+            chain,
             ephem,
             tps_manager,
             signatures_websocket,
@@ -139,7 +139,7 @@ impl BenchRunner {
 
     pub async fn run(mut self) -> BenchResults {
         for i in 0..self.iterations {
-            //self.transaction_provider.bookkeep(&mut self.chain, i);
+            self.transaction_provider.bookkeep(&mut self.chain, i);
             self.step(i).await;
         }
         println!(

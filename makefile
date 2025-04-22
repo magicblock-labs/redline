@@ -36,7 +36,15 @@ THAT ?=
 SENSITIVITY ?= 15
 SILENT ?= false
 
-compare: $(REDLINE_ASSIST)
+define compare_command
 	@$(REDLINE_ASSIST) compare --sensitivity $(SENSITIVITY) $(THIS) $(THIS)
+endef
 
-bench-compare: bench compare clean
+compare: $(REDLINE_ASSIST)
+	$(compare_command)
+
+compare-ignore-error:
+	-$(compare_command)
+
+bench-compare: bench compare-ignore-error clean
+
