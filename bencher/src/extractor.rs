@@ -22,11 +22,17 @@ pub fn account_update_extractor(value: LazyValue) -> Option<u64> {
     Some(u64::from_le_bytes(number))
 }
 
+// TODO: use in getSignatureStatuses implementation
+#[allow(unused)]
+pub fn signature_status_extractor_http(value: LazyValue) -> Option<bool> {
+    Some(!value.is_null())
+}
+
 pub fn signature_response_extractor(value: LazyValue) -> Option<bool> {
     Some(value.as_str().is_some())
 }
 
-pub fn signature_status_extractor(value: LazyValue) -> Option<bool> {
+pub fn signature_status_extractor_ws(value: LazyValue) -> Option<bool> {
     let value = value.get("value")?;
 
     value.get("err").map(|e| e.is_null())

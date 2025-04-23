@@ -1,5 +1,5 @@
 use core::{config::Config, stats::BenchStatistics};
-use std::{hint::black_box, rc::Rc, time::Duration};
+use std::{rc::Rc, time::Duration};
 
 use hyper::Request;
 use keypair::Keypair;
@@ -10,7 +10,7 @@ use crate::{
     blockhash::BlockHashProvider,
     confirmation::{Confirmations, ConfirmationsDB, EventConfirmer},
     extractor::{
-        account_update_extractor, signature_response_extractor, signature_status_extractor,
+        account_update_extractor, signature_response_extractor, signature_status_extractor_ws,
     },
     http::{Connection, ConnectionPool},
     payload,
@@ -70,7 +70,7 @@ impl BenchRunner {
 
         let signatures_websocket = WebsocketPool::new(
             &config.connection,
-            signature_status_extractor,
+            signature_status_extractor_ws,
             shutdown.clone(),
         )
         .await?;
@@ -91,7 +91,7 @@ impl BenchRunner {
             config.data.account_size as u32,
         );
 
-        let subscribe_to_accounts = config.subscription.subscribe_to_accounts;
+        let subscribe_to_accounts = config.confirmations.subscribe_to_accounts;
 
         if subscribe_to_accounts {
             let mut accounts_websocket = WebsocketPool::new(
@@ -107,7 +107,7 @@ impl BenchRunner {
                 let con = accounts_websocket.connection();
                 let sub = Subscription {
                     tx,
-                    payload: payload::accountsub(pk, encoding, id),
+                    payload: payload::account_subscription(pk, encoding, id),
                     oneshot: false,
                     id,
                 };
@@ -129,8 +129,8 @@ impl BenchRunner {
             signature_confirmations,
             delivery_confirmations,
             subscribe_to_accounts,
-            subscribe_to_signatures: config.subscription.subscribe_to_signatures,
-            enforce_total_sync: config.subscription.enforce_total_sync,
+            subscribe_to_signatures: config.confirmations.subscribe_to_signatures,
+            enforce_total_sync: config.confirmations.enforce_total_sync,
             preflight_check: config.benchmark.preflight_check,
             shutdown,
             config: json::to_value(&config).unwrap(),
@@ -188,7 +188,7 @@ impl BenchRunner {
             let tx = self.signature_confirmations.borrow().tx.clone();
             let sub = Subscription {
                 tx,
-                payload: payload::signaturesub(&txn, id),
+                payload: payload::signature_subscription(&txn, id),
                 oneshot: true,
                 id,
             };
@@ -201,9 +201,8 @@ impl BenchRunner {
         let delivery = self.delivery_confirmations.clone();
         delivery.borrow_mut().track(id, None);
 
-        let mut shutdown = self.shutdown.clone();
+        let shutdown = self.shutdown.clone();
         let task = async move {
-            shutdown = black_box(shutdown);
             match response.resolve().await {
                 Ok(Some(false)) => {
                     eprintln!("transaction failed to be executed");

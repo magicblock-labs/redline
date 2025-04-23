@@ -9,7 +9,7 @@ use crate::types::{AccountEncoding, AccountSize, BenchMode, BenchResult, Connect
 pub struct Config {
     pub connection: ConnectionSettings,
     pub benchmark: BenchmarkSettings,
-    pub subscription: SubscriptionSettings,
+    pub confirmations: ConfirmationSettings,
     pub data: DataSettings,
 }
 
@@ -52,9 +52,10 @@ pub struct BenchmarkSettings {
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub struct SubscriptionSettings {
+pub struct ConfirmationSettings {
     pub subscribe_to_accounts: bool,
     pub subscribe_to_signatures: bool,
+    pub get_signature_status: bool,
     pub enforce_total_sync: bool,
 }
 
