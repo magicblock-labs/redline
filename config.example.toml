@@ -71,7 +71,7 @@ mode = "simple-byte-set"
 
 # mode = { mixed = [ "simple-byte-set", { high-cu-cost = { iters = 28 } } ] }
 
-[subscription]
+[confirmations]
 # Subscription settings
 # Whether to subscribe to account notifications: true or false
 subscribe-to-accounts = true
@@ -84,6 +84,8 @@ subscribe-to-signatures = true
 # If disabled, transaction will reserve concurrency slot only for as long as
 # it's required to receive HTTP response
 enforce-total-sync = true
+# TODO: unused
+get-signature-status = false
 
 [data]
 # Data settings for account encoding and size

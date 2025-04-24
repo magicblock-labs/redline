@@ -38,7 +38,7 @@ impl BenchStatistics {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Copy)]
+#[derive(Deserialize, Serialize, Clone, Copy, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ObservationsStats {
     pub count: usize,
@@ -82,6 +82,9 @@ impl ObservationsStats {
 
 impl ObservationsStats {
     pub fn new(mut observations: Vec<u32>, invertedq: bool) -> Self {
+        if observations.is_empty() {
+            return Self::default();
+        }
         observations.sort();
         let count = observations.len();
         let sum: u64 = observations.iter().map(|&x| x as u64).sum();
