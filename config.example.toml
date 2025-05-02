@@ -64,7 +64,7 @@ mode = "simple-byte-set"
 # transactions using intersecting set of accounts will create pressure on
 # scheduler due to account locking
 
-# mode = { read-write = { accounts-pool-size = 32 } }
+# mode = { read-write = { accounts-count = 32 } }
 
 #--------------------------------------------------------------------------------
 # a combination of various benchmarking modes, to simulate more real world scenarios
