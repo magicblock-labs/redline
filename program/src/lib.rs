@@ -52,6 +52,7 @@ fn process_instruction(
         Instruction::AccountDataCopy { id } => {
             account_data_copy(&mut iter, id)?;
         }
+        Instruction::ReadAccountsData { id } => read_accounts_data(&mut iter, id)?,
     }
 
     Ok(())

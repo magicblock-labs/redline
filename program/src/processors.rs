@@ -144,3 +144,15 @@ pub fn account_data_copy(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> P
     );
     Ok(())
 }
+
+pub fn read_accounts_data(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> ProgramResult {
+    while let Ok(account) = next_account_info(iter) {
+        msg!(
+            "account {} has {} space, txn: {}",
+            account.key,
+            account.data_len(),
+            id
+        );
+    }
+    Ok(())
+}

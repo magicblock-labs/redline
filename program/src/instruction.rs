@@ -29,7 +29,14 @@ pub enum Instruction {
     MultiAccountRead {
         id: u64,
     },
+    // Copy data from first account to the second, writable account should have the same or more
+    // space in data field as the readonly account
     AccountDataCopy {
+        id: u64,
+    },
+
+    // Read accounts from accounts list and log their data field size along with transaction id
+    ReadAccountsData {
         id: u64,
     },
 }
