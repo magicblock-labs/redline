@@ -37,7 +37,7 @@ SENSITIVITY ?= 15
 SILENT ?= false
 
 define compare_command
-	@$(REDLINE_ASSIST) compare --sensitivity $(SENSITIVITY) $(THIS) $(THIS)
+	@$(REDLINE_ASSIST) compare --sensitivity $(SENSITIVITY) $(THIS) $(THAT)
 endef
 
 compare: $(REDLINE_ASSIST)
