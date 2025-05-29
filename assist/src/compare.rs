@@ -68,8 +68,7 @@ pub fn compare(
         ];
 
         for (stat_name, this_value, that_value) in comparisons {
-            let denominator = this_value.min(that_value) as f64;
-            let diff = (this_value - that_value) as f64 / denominator * 100.0 * modifier;
+            let diff = ((this_value as f64 / that_value as f64) * 100.0 - 100.0) * modifier;
             let mut cell = Cell::new_align(&format!("{diff:>+03.1}%",), Alignment::RIGHT);
             if diff.abs() > sensitivity && diff.is_sign_positive() {
                 cell.style(Attr::ForegroundColor(RED));

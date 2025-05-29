@@ -17,7 +17,7 @@ use rpc::nonblocking::rpc_client::RpcClient;
 use signer::{EncodableKey, Signer};
 use transaction::Transaction;
 
-const LAMPORTS_PER_BENCH: u64 = 200_000_000;
+const LAMPORTS_PER_BENCH: u64 = 500_000_000;
 const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
 
 struct Preparator {
@@ -157,7 +157,7 @@ impl Preparator {
         let hash = self.client.get_latest_blockhash().await?;
         let txn = systransaction::transfer(&self.vault, to, amount, hash);
         self.client
-            .send_and_confirm_transaction_with_spinner(&txn)
+            .send_and_confirm_transaction_with_spinner_and_commitment(&txn, CONFIRMED)
             .await?;
         Ok(())
     }

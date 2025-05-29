@@ -121,7 +121,9 @@ impl TransactionProvider for TriggerCloneTransaction {
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        self.ro_accounts.clone()
+        let mut accounts = self.ro_accounts.clone();
+        accounts.push(self.pda);
+        accounts
     }
 }
 

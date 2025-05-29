@@ -165,8 +165,6 @@ impl BenchRunner {
         let txn = self
             .transaction_provider
             .generate(id, blockhash, &self.signer);
-        let request = Request::new(payload::transaction(&txn, self.preflight_check));
-        let response = con.send(request, signature_response_extractor);
         let total_sync = self.enforce_total_sync;
         macro_rules! maybe_subscribe {
             ($subscribe:expr, $confirmations:expr) => {
@@ -198,6 +196,8 @@ impl BenchRunner {
             maybe_subscribe!(self.subscribe_to_accounts, self.account_confirmations),
             maybe_subscribe!(self.subscribe_to_signatures, self.signature_confirmations),
         );
+        let request = Request::new(payload::transaction(&txn, self.preflight_check));
+        let response = con.send(request, signature_response_extractor);
         let delivery = self.delivery_confirmations.clone();
         delivery.borrow_mut().track(id, None);
 
@@ -205,10 +205,10 @@ impl BenchRunner {
         let task = async move {
             match response.resolve().await {
                 Ok(Some(false)) => {
-                    eprintln!("transaction failed to be executed");
+                    eprintln!("transaction {id} failed to be executed");
                 }
                 Err(err) => {
-                    eprintln!("transaction failed to be delivered: {err}");
+                    eprintln!("transaction {id} failed to be delivered: {err}");
                 }
                 _ => (),
             }
