@@ -11,7 +11,7 @@ pub type BenchResult<T> = Result<T, DynError>;
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub enum BenchMode {
+pub enum TpsBenchMode {
     SimpleByteSet,
     #[serde(rename_all = "kebab-case")]
     TriggerClones {
@@ -25,6 +25,16 @@ pub enum BenchMode {
     ReadWrite {
         accounts_count: u8,
     },
+    Mixed(Vec<Self>),
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub enum RpsBenchMode {
+    GetAccountInfo,
+    GetMutlipleAccounts,
+    GetBalance,
+    GetTokenAccountBalance,
     Mixed(Vec<Self>),
 }
 

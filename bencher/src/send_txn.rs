@@ -1,4 +1,7 @@
-use core::{config::Config, stats::BenchStatistics};
+use core::{
+    config::Config,
+    stats::{ObservationsStats, TpsBenchStatistics},
+};
 use std::{rc::Rc, time::Duration};
 
 use hyper::Request;
@@ -14,13 +17,13 @@ use crate::{
     },
     http::{Connection, ConnectionPool},
     payload,
-    tps::TpsManager,
+    rps::RpsManager,
     transaction::TransactionProvider,
     websocket::{Subscription, WebsocketPool},
     BenchResult, ShutDown, ShutDownSender,
 };
 
-pub struct BenchRunner {
+pub struct TpsBenchRunner {
     transaction_provider: Box<dyn TransactionProvider>,
     blockhash: BlockHashProvider,
     signer: Keypair,
@@ -34,7 +37,7 @@ pub struct BenchRunner {
     signature_confirmations: ConfirmationsDB<bool>,
     delivery_confirmations: ConfirmationsDB<()>,
 
-    tps_manager: TpsManager,
+    tps_manager: RpsManager,
 
     iterations: u64,
 
@@ -47,7 +50,7 @@ pub struct BenchRunner {
     config: json::Value,
 }
 
-impl BenchRunner {
+impl TpsBenchRunner {
     pub async fn new(signer: Keypair, config: Config) -> BenchResult<Self> {
         let chain = Connection::new(
             &config.connection.chain_url,
@@ -66,7 +69,8 @@ impl BenchRunner {
             .inspect_err(|err| eprintln!("failed to create blockhash provider: {err}"))?;
         let ephem = ConnectionPool::new(&config.connection).await?;
 
-        let tps_manager = TpsManager::new(config.benchmark.concurrency, config.benchmark.tps);
+        let tps_manager =
+            RpsManager::new(config.tps_benchmark.concurrency, config.tps_benchmark.tps);
 
         let signatures_websocket = WebsocketPool::new(
             &config.connection,
@@ -86,7 +90,7 @@ impl BenchRunner {
         let (delivery_confirmations, _) = Confirmations::new();
 
         let transaction_provider = crate::transaction::make_provider(
-            &config.benchmark.mode,
+            &config.tps_benchmark.mode,
             signer.pubkey(),
             config.data.account_size as u32,
         );
@@ -124,35 +128,35 @@ impl BenchRunner {
             ephem,
             tps_manager,
             signatures_websocket,
-            iterations: config.benchmark.iterations,
+            iterations: config.tps_benchmark.iterations,
             account_confirmations,
             signature_confirmations,
             delivery_confirmations,
             subscribe_to_accounts,
             subscribe_to_signatures: config.confirmations.subscribe_to_signatures,
             enforce_total_sync: config.confirmations.enforce_total_sync,
-            preflight_check: config.benchmark.preflight_check,
+            preflight_check: config.tps_benchmark.preflight_check,
             shutdown,
             config: json::to_value(&config).unwrap(),
         })
     }
 
-    pub async fn run(mut self) -> BenchResults {
+    pub async fn run(mut self) -> TpsBenchResults {
         for i in 0..self.iterations {
             self.transaction_provider.bookkeep(&mut self.chain, i);
             self.step(i).await;
         }
         println!(
-            "The Benchmark run is complete, number of transaction sent: {}",
+            "The TPS Benchmark run is complete, number of transaction sent: {}",
             self.iterations
         );
 
-        BenchResults {
+        TpsBenchResults {
             configuration: self.config,
             delivery_confirmations: self.delivery_confirmations,
             account_confirmations: self.account_confirmations,
             signature_confirmations: self.signature_confirmations,
-            tps_manager: self.tps_manager,
+            tps: self.tps_manager.stats(),
         }
     }
 
@@ -205,10 +209,10 @@ impl BenchRunner {
         let task = async move {
             match response.resolve().await {
                 Ok(Some(false)) => {
-                    eprintln!("transaction {id} failed to be executed");
+                    eprintln!("transaction failed to be executed");
                 }
                 Err(err) => {
-                    eprintln!("transaction {id} failed to be delivered: {err}");
+                    eprintln!("transaction failed to be delivered: {err}");
                 }
                 _ => (),
             }
@@ -228,16 +232,16 @@ impl BenchRunner {
     }
 }
 
-pub struct BenchResults {
+pub struct TpsBenchResults {
     configuration: json::Value,
     account_confirmations: ConfirmationsDB<u64>,
     signature_confirmations: ConfirmationsDB<bool>,
     delivery_confirmations: ConfirmationsDB<()>,
-    tps_manager: TpsManager,
+    tps: ObservationsStats,
 }
 
-impl BenchResults {
-    pub fn stats(self) -> BenchStatistics {
+impl TpsBenchResults {
+    pub fn stats(self) -> TpsBenchStatistics {
         macro_rules! finalize {
             ($confirmation: expr) => {
                 Rc::try_unwrap($confirmation)
@@ -246,12 +250,12 @@ impl BenchResults {
                     .finalize()
             };
         }
-        BenchStatistics {
+        TpsBenchStatistics {
             configuration: self.configuration,
             account_update_latency: finalize!(self.account_confirmations),
             signature_confirmation_latency: finalize!(self.signature_confirmations),
-            http_requests_latency: finalize!(self.delivery_confirmations),
-            transactions_per_second: self.tps_manager.stats(),
+            send_txn_requests_latency: finalize!(self.delivery_confirmations),
+            transactions_per_second: self.tps,
         }
     }
 }

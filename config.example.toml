@@ -1,5 +1,16 @@
 # Example configuration file for Redline application
 
+# Inidicates how many concurrent benchmarks to run
+# 
+# NOTE: each provided unit of parallelism will start its own thread of
+# execution for benchmark, dramatically increasing the load on target
+# validator. I.e. each benchmark will run in parallel with others on their own
+# OS thread, so for example providing 10 for parallelism, has 10x load in
+# comparison to 1. This might negatively affect validator performance running
+# on the same host as the REDLINE will compete for compute resources with
+# validator process
+parallelism = 1
+
 # Connection settings for main chain and ephemeral URLs
 [connection]
 # URL of the chain node to connect to
@@ -13,15 +24,41 @@ http-connections-count = 16
 # Maximum number of WebSocket connections
 ws-connections-count = 16
 
-# Benchmark settings
-[benchmark]
+# RPS Benchmark settings (getX Requests)
+[rps-benchmark]
+# whether to perform RPS benchmark, either RPS or TPS benchmark should be enabled or both
+enabled = true
+# Number of iterations for the benchmark
+iterations = 150000
+# The desired throughput for transaction submission to the target ER node,
+# expressed in transactions per second. 
+# Note: This serves as a hint rather than a strict limit. For instance,
+# specifying a rate of 10,000 RPS while the ER node's request handling 
+# rate is 3,000 RPS, will not increase the validator's capacity to handle the
+# specified throughput. Consequently, any value exceeding the validator's
+# saturation point is ineffective.
+rps = 5000
+# Number of concurrent executions
+concurrency = 50
+# Number of accounts in the pool to be used getX requests 
+accounts-count = 8
+
+# Mode of rps benchmark, options:
+mode = "get-account-info"
+# mode = "get-multiple-accounts"
+# mode = "get-token-account-balance"
+# mode = "get-balance"
+# mode = { combined = [ "get-account-info", "get-balance" ] }
+
+# TPS Benchmark settings
+[tps-benchmark]
 # Number of iterations for the benchmark
 iterations = 100000
 # The desired throughput for transaction submission to the target ER node,
 # expressed in transactions per second. 
 # Note: This serves as a hint rather than a strict limit. For instance,
 # specifying a rate of 10,000 TPS while the ER node's transaction ingestion
-# rate is 3,000 TPS will not increase the validator's capacity to handle the
+# rate is 3,000 TPS, will not increase the validator's capacity to handle the
 # specified throughput. Consequently, any value exceeding the validator's
 # saturation point is ineffective.
 tps = 3000
@@ -30,18 +67,8 @@ concurrency = 64
 # Perform a preflight check for each transaction: true or false
 preflight-check = false
 
-# Inidicates how many concurrent benchmarks to run
-# 
-# NOTE: each provided unit of parallelism will start its own thread of
-# execution for benchmark, dramatically increasing the load on target
-# validator. I.e. each benchmark will run in parallel with others on their own
-# OS thread, so for example providing 10 for parallelism, has 10x load in
-# comparison to 1. This might negatively affect validator performance running
-# on the same host as the REDLINE will compete for compute resources with
-# validator process
-parallelism = 1
 
-# Mode of benchmark, options:
+# Mode of tps benchmark, options:
 mode = "simple-byte-set"
 
 # Alternative modes are:

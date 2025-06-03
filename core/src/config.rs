@@ -2,15 +2,19 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{AccountEncoding, AccountSize, BenchMode, BenchResult, ConnectionType, Url};
+use crate::types::{
+    AccountEncoding, AccountSize, BenchResult, ConnectionType, RpsBenchMode, TpsBenchMode, Url,
+};
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     pub connection: ConnectionSettings,
-    pub benchmark: BenchmarkSettings,
+    pub tps_benchmark: TransactionBenchmarkSettings,
+    pub rps_benchmark: RoRequestBenchmarkSettings,
     pub confirmations: ConfirmationSettings,
     pub data: DataSettings,
+    pub parallelism: u8,
 }
 
 impl Config {
@@ -41,13 +45,24 @@ pub struct ConnectionSettings {
 
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub struct BenchmarkSettings {
+pub struct TransactionBenchmarkSettings {
+    pub enabled: bool,
     pub iterations: u64,
     pub tps: u32,
     pub concurrency: usize,
     pub preflight_check: bool,
-    pub parallelism: u8,
-    pub mode: BenchMode,
+    pub mode: TpsBenchMode,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct RoRequestBenchmarkSettings {
+    pub enabled: bool,
+    pub iterations: u64,
+    pub rps: u32,
+    pub accounts_count: u8,
+    pub concurrency: usize,
+    pub mode: RpsBenchMode,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

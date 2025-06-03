@@ -2,21 +2,128 @@ use json::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct BenchStatistics {
+pub struct TpsBenchStatistics {
     pub configuration: json::Value,
-    pub http_requests_latency: ObservationsStats,
+    pub send_txn_requests_latency: ObservationsStats,
     pub account_update_latency: ObservationsStats,
     pub signature_confirmation_latency: ObservationsStats,
 
     pub transactions_per_second: ObservationsStats,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RpsBenchStatistics {
+    pub configuration: json::Value,
+    pub latency: ObservationsStats,
+
+    pub requests_per_second: ObservationsStats,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct CombinedBenchStatistics {
+    pub configuration: json::Value,
+    pub get_request_latency: ObservationsStats,
+    pub requests_per_second: ObservationsStats,
+
+    pub send_txn_requests_latency: ObservationsStats,
+    pub account_update_latency: ObservationsStats,
+    pub signature_confirmation_latency: ObservationsStats,
+
+    pub transactions_per_second: ObservationsStats,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum BenchStatistics {
+    Tps(TpsBenchStatistics),
+    Rps(RpsBenchStatistics),
+    Combined(CombinedBenchStatistics),
+}
+
 impl BenchStatistics {
-    pub fn merge(mut stats: Vec<Self>) -> Self {
+    pub fn configuration(&self) -> &json::Value {
+        match self {
+            Self::Tps(s) => &s.configuration,
+            Self::Rps(s) => &s.configuration,
+            Self::Combined(s) => &s.configuration,
+        }
+    }
+
+    pub fn merge_rps_to_tps(self, stats: Option<RpsBenchStatistics>) -> Self {
+        let Some(stats) = stats else {
+            return self;
+        };
+        let Self::Tps(s) = self else {
+            return self;
+        };
+        let combined = CombinedBenchStatistics {
+            configuration: stats.configuration,
+            account_update_latency: s.account_update_latency,
+            transactions_per_second: s.transactions_per_second,
+            signature_confirmation_latency: s.signature_confirmation_latency,
+            requests_per_second: stats.requests_per_second,
+            send_txn_requests_latency: s.send_txn_requests_latency,
+            get_request_latency: stats.latency,
+        };
+        Self::Combined(combined)
+    }
+
+    pub fn account_update_latency(&self) -> Option<ObservationsStats> {
+        match self {
+            Self::Tps(s) => Some(s.account_update_latency),
+            Self::Combined(s) => Some(s.account_update_latency),
+            Self::Rps(_) => None,
+        }
+    }
+
+    pub fn send_txn_requests_latency(&self) -> Option<ObservationsStats> {
+        match self {
+            Self::Tps(s) => Some(s.send_txn_requests_latency),
+            Self::Combined(s) => Some(s.send_txn_requests_latency),
+            Self::Rps(_) => None,
+        }
+    }
+
+    pub fn signature_confirmation_latency(&self) -> Option<ObservationsStats> {
+        match self {
+            Self::Tps(s) => Some(s.signature_confirmation_latency),
+            Self::Combined(s) => Some(s.signature_confirmation_latency),
+            Self::Rps(_) => None,
+        }
+    }
+
+    pub fn transactions_per_second(&self) -> Option<ObservationsStats> {
+        match self {
+            Self::Tps(s) => Some(s.transactions_per_second),
+            Self::Combined(s) => Some(s.transactions_per_second),
+            Self::Rps(_) => None,
+        }
+    }
+
+    pub fn requests_per_second(&self) -> Option<ObservationsStats> {
+        match self {
+            Self::Tps(_) => None,
+            Self::Combined(s) => Some(s.requests_per_second),
+            Self::Rps(s) => Some(s.requests_per_second),
+        }
+    }
+
+    pub fn get_request_latency(&self) -> Option<ObservationsStats> {
+        match self {
+            Self::Tps(_) => None,
+            Self::Combined(s) => Some(s.get_request_latency),
+            Self::Rps(s) => Some(s.latency),
+        }
+    }
+}
+
+impl TpsBenchStatistics {
+    pub fn merge(mut stats: Vec<Self>) -> BenchStatistics {
         let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
 
-        let http_requests_latency =
-            ObservationsStats::merge(stats.iter().map(|s| s.http_requests_latency).collect());
+        let send_txn_requests_latency =
+            ObservationsStats::merge(stats.iter().map(|s| s.send_txn_requests_latency).collect());
         let account_update_latency =
             ObservationsStats::merge(stats.iter().map(|s| s.account_update_latency).collect());
         let signature_confirmation_latency = ObservationsStats::merge(
@@ -28,12 +135,28 @@ impl BenchStatistics {
         let transactions_per_second =
             ObservationsStats::merge(stats.iter().map(|s| s.transactions_per_second).collect());
 
-        BenchStatistics {
+        BenchStatistics::Tps(Self {
             configuration,
-            http_requests_latency,
+            send_txn_requests_latency,
             account_update_latency,
             signature_confirmation_latency,
             transactions_per_second,
+        })
+    }
+}
+
+impl RpsBenchStatistics {
+    pub fn merge(mut stats: Vec<Self>) -> Self {
+        let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
+
+        let latency = ObservationsStats::merge(stats.iter().map(|s| s.latency).collect());
+        let requests_per_second =
+            ObservationsStats::merge(stats.iter().map(|s| s.requests_per_second).collect());
+
+        Self {
+            configuration,
+            latency,
+            requests_per_second,
         }
     }
 }

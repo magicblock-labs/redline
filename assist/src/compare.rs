@@ -34,27 +34,39 @@ pub fn compare(
 
     let metrics = vec![
         (
-            "Request Latency",
-            &this.http_requests_latency,
-            &that.http_requests_latency,
+            "sendTransaction Response Latency",
+            this.send_txn_requests_latency(),
+            that.send_txn_requests_latency(),
             1.0f64,
         ),
         (
             "Account Update",
-            &this.account_update_latency,
-            &that.account_update_latency,
+            this.account_update_latency(),
+            that.account_update_latency(),
             1.0,
         ),
         (
             "Signature Confirmation",
-            &this.signature_confirmation_latency,
-            &that.signature_confirmation_latency,
+            this.signature_confirmation_latency(),
+            that.signature_confirmation_latency(),
             1.0,
         ),
         (
             "TPS",
-            &this.transactions_per_second,
-            &that.transactions_per_second,
+            this.transactions_per_second(),
+            that.transactions_per_second(),
+            -1.0,
+        ),
+        (
+            "getX Request Response Latency",
+            this.get_request_latency(),
+            that.get_request_latency(),
+            1.0,
+        ),
+        (
+            "RPS",
+            this.requests_per_second(),
+            that.requests_per_second(),
             -1.0,
         ),
     ];
@@ -62,12 +74,31 @@ pub fn compare(
     let mut regression_detected = false;
     for (name, this_stats, that_stats, modifier) in metrics {
         let comparisons = vec![
-            ("Median", this_stats.median, that_stats.median),
-            ("Q95", this_stats.quantile95, that_stats.quantile95),
-            ("Average", this_stats.avg, that_stats.avg),
+            (
+                "Median",
+                this_stats.map(|s| s.median),
+                that_stats.map(|s| s.median),
+            ),
+            (
+                "Q95",
+                this_stats.map(|s| s.quantile95),
+                that_stats.map(|s| s.quantile95),
+            ),
+            (
+                "Average",
+                this_stats.map(|s| s.avg),
+                that_stats.map(|s| s.avg),
+            ),
         ];
 
         for (stat_name, this_value, that_value) in comparisons {
+            let Some(this_value) = this_value else {
+                continue;
+            };
+            let Some(that_value) = that_value else {
+                continue;
+            };
+
             let diff = ((this_value as f64 / that_value as f64) * 100.0 - 100.0) * modifier;
             let mut cell = Cell::new_align(&format!("{diff:>+03.1}%",), Alignment::RIGHT);
             if diff.abs() > sensitivity && diff.is_sign_positive() {

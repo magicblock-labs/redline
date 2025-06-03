@@ -48,3 +48,27 @@ pub fn transaction(transaction: &Transaction, check: bool) -> String {
         encoded, !check
     )
 }
+
+pub fn get_account_info(pubkey: Pubkey, encoding: AccountEncoding, id: u64) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"getAccountInfo","params":["{pubkey}",{{"encoding":"{}"}}]}}"#,
+        encoding.as_str()
+    )
+}
+
+pub fn get_multiple_accounts(pubkeys: &[Pubkey], encoding: AccountEncoding, id: u64) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"getMultipleAccounts","params":[{pubkeys:?},{{"encoding":"{}"}}]}}"#,
+        encoding.as_str()
+    )
+}
+
+pub fn get_balance(pubkey: Pubkey, id: u64) -> String {
+    format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"getBalance","params":[{pubkey}]}}"#,)
+}
+
+pub fn get_token_account_balance(pubkey: Pubkey, id: u64) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"getTokenAccountBalance","params":[{pubkey}]}}"#,
+    )
+}

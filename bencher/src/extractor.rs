@@ -22,6 +22,10 @@ pub fn account_update_extractor(value: LazyValue) -> Option<u64> {
     Some(u64::from_le_bytes(number))
 }
 
+pub fn value_extractor(value: LazyValue) -> Option<bool> {
+    Some(value.get("value")?.is_object())
+}
+
 // TODO: use in getSignatureStatuses implementation
 #[allow(unused)]
 pub fn signature_status_extractor_http(value: LazyValue) -> Option<bool> {

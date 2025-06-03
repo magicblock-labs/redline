@@ -1,4 +1,4 @@
-use core::types::BenchMode;
+use core::types::TpsBenchMode;
 use std::time::{Duration, Instant};
 
 use hash::Hash;
@@ -145,18 +145,22 @@ impl TransactionProvider for Vec<Box<dyn TransactionProvider>> {
     }
 }
 
-pub fn make_provider(mode: &BenchMode, base: Pubkey, space: u32) -> Box<dyn TransactionProvider> {
+pub fn make_provider(
+    mode: &TpsBenchMode,
+    base: Pubkey,
+    space: u32,
+) -> Box<dyn TransactionProvider> {
     match mode {
-        BenchMode::Mixed(modes) => Box::new(
+        TpsBenchMode::Mixed(modes) => Box::new(
             modes
                 .iter()
                 .map(|m| make_provider(m, base, space))
                 .collect::<Vec<_>>(),
         ),
-        BenchMode::SimpleByteSet => Box::new(SimpleTransaction {
+        TpsBenchMode::SimpleByteSet => Box::new(SimpleTransaction {
             pda: derive_pda(base, space, 0).0,
         }),
-        BenchMode::TriggerClones {
+        TpsBenchMode::TriggerClones {
             clone_frequency_secs,
             accounts_count,
         } => {
@@ -170,7 +174,7 @@ pub fn make_provider(mode: &BenchMode, base: Pubkey, space: u32) -> Box<dyn Tran
                 last_chain_update: Instant::now(),
             })
         }
-        BenchMode::ReadWrite { accounts_count } => {
+        TpsBenchMode::ReadWrite { accounts_count } => {
             let accounts = (1..=*accounts_count)
                 .map(|seed| derive_pda(base, space, seed).0)
                 .collect();
@@ -179,7 +183,7 @@ pub fn make_provider(mode: &BenchMode, base: Pubkey, space: u32) -> Box<dyn Tran
                 rng: thread_rng(),
             })
         }
-        BenchMode::HighCuCost { iters } => Box::new(ExpensiveTransaction {
+        TpsBenchMode::HighCuCost { iters } => Box::new(ExpensiveTransaction {
             pda: derive_pda(base, space, 0).0,
             iters: *iters,
         }),

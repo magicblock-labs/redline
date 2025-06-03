@@ -9,6 +9,8 @@ REDLINE is a powerful benchmarking tool designed for load testing MagicBlock val
   
 - **Configurable Transaction Per Second (TPS)**: Users can specify the desired TPS to target during the benchmark, allowing them to simulate different load levels and understand how the validator performs under pressure.
 
+- **Configurable Requests Per Second (TPS)**: Users can specify the desired RPS to target during the benchmark, this allows for mixing in read requests like `getAccountInfo` and others to the raw transaction benchmarking.
+
 - **Customizable Connection Settings**: Supports both HTTP1 and HTTP2, with configurable maximum connections for both HTTP and WebSocket protocols. REDLINE has a very tight low level control over network IO to ensure accurate measurements.
 
 - **Flexible Benchmark Modes**: REDLINE supports a range of benchmark modes to target specific performance areas:
@@ -17,6 +19,7 @@ REDLINE is a powerful benchmarking tool designed for load testing MagicBlock val
   - **High Compute Cost**: Stresses the validator with transactions that require significant compute resources.
   - **Read and Write Across Accounts**: Evaluates the performance of simultaneous read and write operations, with multiple transactions using intersecting set of accounts, thus creating lock contention.
   - **Mixed Mode**: Combines multiple transaction types to simulate complex workloads.
+  - **getX** requests: Various account related JSON-RPC requests can be used in addition (or as a standalone benchmark) to the transaction load testing.
 
 - **Detailed Latency Tracking**: REDLINE provides granular insights into transaction and event confirmation latencies, helping to identify bottlenecks.
 
@@ -93,17 +96,25 @@ make clean-all # removes results of all previous benchmarks
 
 REDLINE uses a TOML configuration file to manage its settings. Here is an example configuration:
 ```toml
+parallelism = 4
+
 [connection]
 chain-url = "http://api.devnet.solana.com"
 ephem-url = "http://127.0.0.1:8899"
 http-connection-type = "http1"
 
-[benchmark]
+[rps-benchmark]
+enabled = true
+iterations = 15000
+rps = 100
+concurrency = 16
+mode = "get-account-info"
+
+[tps-benchmark]
+enabled = true
 iterations = 15000
 tps = 100
 concurrency = 16
-preflight-check = true
-parallelism = 4
 mode = "simple-byte-set"
 
 [subscription]

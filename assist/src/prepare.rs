@@ -1,7 +1,7 @@
 use core::{
     config::Config,
     consts::KEYPAIRS_PATH,
-    types::{BenchMode, BenchResult},
+    types::{BenchResult, TpsBenchMode},
 };
 use std::path::PathBuf;
 
@@ -29,7 +29,7 @@ struct Preparator {
 
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
     let config = Config::from_path(path)?;
-    let keypairs: Vec<_> = (1..=config.benchmark.parallelism)
+    let keypairs: Vec<_> = (1..=config.parallelism)
         .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n:>03}.json")))
         .collect::<BenchResult<_>>()?;
     let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))?;
@@ -61,8 +61,17 @@ impl Preparator {
 
     async fn init(&self) -> BenchResult<()> {
         let space = self.config.data.account_size as u32;
-        let accounts = self.extract_accounts(&self.config.benchmark.mode);
-        for pda in accounts {
+        let tps_accounts = if self.config.tps_benchmark.enabled {
+            self.extract_accounts_tps(&self.config.tps_benchmark.mode)
+        } else {
+            vec![]
+        };
+        let rps_accounts = if self.config.rps_benchmark.enabled {
+            self.extract_accounts_rps(self.config.rps_benchmark.accounts_count)
+        } else {
+            vec![]
+        };
+        for pda in tps_accounts.into_iter().chain(rps_accounts.into_iter()) {
             let response = self
                 .client
                 .get_account_with_commitment(&pda.pubkey, Default::default())
@@ -104,8 +113,8 @@ impl Preparator {
         Ok(())
     }
 
-    fn extract_accounts(&self, mode: &BenchMode) -> Vec<Pda> {
-        use BenchMode::*;
+    fn extract_accounts_tps(&self, mode: &TpsBenchMode) -> Vec<Pda> {
+        use TpsBenchMode::*;
         let space = self.config.data.account_size as u32;
 
         let derive_accounts = |count: u8| -> Vec<Pda> {
@@ -131,9 +140,27 @@ impl Preparator {
             }
             Mixed(modes) => modes
                 .iter()
-                .flat_map(|m| self.extract_accounts(m))
+                .flat_map(|m| self.extract_accounts_tps(m))
                 .collect(),
         }
+    }
+
+    fn extract_accounts_rps(&self, count: u8) -> Vec<Pda> {
+        let space = self.config.data.account_size as u32;
+
+        self.keypairs
+            .iter()
+            .flat_map(|k| (0..count).map(move |seed| (k, seed)))
+            .map(|(k, seed)| {
+                let (pubkey, bump) = derive_pda(k.pubkey(), space, seed);
+                Pda {
+                    payer: k.insecure_clone(),
+                    pubkey,
+                    seed,
+                    bump,
+                }
+            })
+            .collect()
     }
 
     async fn delegate(&self, pda: &Pda) -> BenchResult<()> {
