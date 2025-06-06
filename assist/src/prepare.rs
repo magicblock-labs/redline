@@ -135,13 +135,18 @@ impl Preparator {
 
         match mode {
             SimpleByteSet | HighCuCost { .. } => derive_accounts(1),
-            TriggerClones { accounts_count, .. } | ReadWrite { accounts_count } => {
-                derive_accounts(*accounts_count)
+            TriggerClones { accounts_count, .. }
+            | ReadWrite { accounts_count }
+            | ReadOnly { accounts_count, .. }
+            | Commit { accounts_count, .. } => derive_accounts(*accounts_count),
+            Mixed(modes) => {
+                let mut accounts: Vec<_> = modes
+                    .iter()
+                    .flat_map(|m| self.extract_accounts_tps(m))
+                    .collect();
+                accounts.dedup_by_key(|a| a.pubkey);
+                accounts
             }
-            Mixed(modes) => modes
-                .iter()
-                .flat_map(|m| self.extract_accounts_tps(m))
-                .collect(),
         }
     }
 

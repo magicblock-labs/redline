@@ -25,6 +25,16 @@ pub enum TpsBenchMode {
     ReadWrite {
         accounts_count: u8,
     },
+    #[serde(rename_all = "kebab-case")]
+    ReadOnly {
+        accounts_count: u8,
+        accounts_per_transaction: u8,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Commit {
+        accounts_count: u8,
+        accounts_per_transaction: u8,
+    },
     Mixed(Vec<Self>),
 }
 

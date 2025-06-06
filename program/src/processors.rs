@@ -156,3 +156,14 @@ pub fn read_accounts_data(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> 
     }
     Ok(())
 }
+
+pub fn commit_accounts(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> ProgramResult {
+    let payer = next_account_info(iter)?;
+    let magic_context = next_account_info(iter)?;
+    let magic_program = next_account_info(iter)?;
+    let accounts: Vec<_> = iter.collect();
+    let count = accounts.len();
+    sdk::ephem::commit_accounts(payer, accounts, magic_context, magic_program)?;
+    msg!("committed {} accounts to chain txn: {}", count, id);
+    Ok(())
+}

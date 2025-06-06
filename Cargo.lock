@@ -3487,6 +3487,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bs58",
+ "ephemeral-rollups-sdk",
  "fastwebsockets",
  "http-body-util",
  "hyper 1.6.0",

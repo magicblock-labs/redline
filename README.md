@@ -1,42 +1,79 @@
 
 # REDLINE
 
-REDLINE is a powerful benchmarking tool designed for load testing MagicBlock validators. It enables developers and operators to simulate high-load scenarios and observe the performance of their validator nodes. With its flexible configuration options and multiple modes of operation, REDLINE is an essential tool for anyone looking to optimize the performance of their Solana infrastructure.
+REDLINE is a powerful benchmarking tool designed for load testing MagicBlock
+validators. It enables developers and operators to simulate high-load scenarios
+and observe the performance of their validator nodes. With its flexible
+configuration options and multiple modes of operation, REDLINE is an essential
+tool for anyone looking to optimize the performance of their Solana
+infrastructure.
 
 ## Features
 
-- **Multi-threaded Execution**: REDLINE is capable of running multiple benchmarks concurrently, using different keypairs, which are used to derive many different PDA accounts to be used in benchmark transactions, this simulates real-world load on the validator.
+- **Multi-threaded Execution**: REDLINE is capable of running multiple
+  benchmarks concurrently, using different keypairs, which are used to derive
+  many different PDA accounts to be used in benchmark transactions, this
+  simulates real-world load on the validator.
   
-- **Configurable Transaction Per Second (TPS)**: Users can specify the desired TPS to target during the benchmark, allowing them to simulate different load levels and understand how the validator performs under pressure.
+- **Configurable Transaction Per Second (TPS)**: Users can specify the desired
+  TPS to target during the benchmark, allowing them to simulate different load
+  levels and understand how the validator performs under pressure.
 
-- **Configurable Requests Per Second (TPS)**: Users can specify the desired RPS to target during the benchmark, this allows for mixing in read requests like `getAccountInfo` and others to the raw transaction benchmarking.
+- **Configurable Requests Per Second (TPS)**: Users can specify the desired RPS
+  to target during the benchmark, this allows for mixing in read requests like
+  `getAccountInfo` and others to the raw transaction benchmarking.
 
-- **Customizable Connection Settings**: Supports both HTTP1 and HTTP2, with configurable maximum connections for both HTTP and WebSocket protocols. REDLINE has a very tight low level control over network IO to ensure accurate measurements.
+- **Customizable Connection Settings**: Supports both HTTP1 and HTTP2, with
+  configurable maximum connections for both HTTP and WebSocket protocols.
+  REDLINE has a very tight low level control over network IO to ensure accurate
+  measurements.
 
-- **Flexible Benchmark Modes**: REDLINE supports a range of benchmark modes to target specific performance areas:
+- **Flexible Benchmark Modes**: REDLINE supports a range of benchmark modes to
+  target specific performance areas:
   - **Simple Byte Set**: Tests basic transaction throughput.
-  - **Trigger Clones**: Simulates the overhead of handling multiple read-only accounts, which are regularly updated on main chain, thus forcing them to be recloned.
-  - **High Compute Cost**: Stresses the validator with transactions that require significant compute resources.
-  - **Read and Write Across Accounts**: Evaluates the performance of simultaneous read and write operations, with multiple transactions using intersecting set of accounts, thus creating lock contention.
-  - **Mixed Mode**: Combines multiple transaction types to simulate complex workloads.
-  - **getX** requests: Various account related JSON-RPC requests can be used in addition (or as a standalone benchmark) to the transaction load testing.
+  - **Trigger Clones**: Simulates the overhead of handling multiple read-only
+    accounts, which are regularly updated on main chain, thus forcing them to
+    be recloned.
+  - **High Compute Cost**: Stresses the validator with transactions that
+    require significant compute resources.
+  - **Read and Write Across Accounts**: Evaluates the performance of
+    simultaneous read and write operations, with multiple transactions using
+    intersecting set of accounts, thus creating lock contention.
+  - **Mixed Mode**: Combines multiple transaction types to simulate complex
+    workloads.
+  - **Read Only**: Accounts in the transaction are used as read only and thus
+    can be used to test multiple such transactions running in parallel without
+    locking on the same accounts
+  - **Commit**: Generates commit transactions in the ER (to commit the state to
+    the base chain), can be mixed in with other modes which modify those
+    accounts
+  - **getX** requests: Various account related JSON-RPC requests can be used in
+    addition (or as a standalone benchmark) to the transaction load testing.
 
-- **Detailed Latency Tracking**: REDLINE provides granular insights into transaction and event confirmation latencies, helping to identify bottlenecks.
+- **Detailed Latency Tracking**: REDLINE provides granular insights into
+  transaction and event confirmation latencies, helping to identify
+  bottlenecks.
 
-- **Comprehensive Statistics**: After each benchmark, REDLINE generates detailed statistics including latency distributions, TPS achieved, and more.
+- **Comprehensive Statistics**: After each benchmark, REDLINE generates
+  detailed statistics including latency distributions, TPS achieved, and more.
 
 ## Getting Started
 
-To start using REDLINE, clone the repository to your local environment. Configuration is managed through a TOML file, which allows you to specify connection settings, benchmarking parameters, and more.
+To start using REDLINE, clone the repository to your local environment.
+Configuration is managed through a TOML file, which allows you to specify
+connection settings, benchmarking parameters, and more.
 
-Once configured, simply run the REDLINE executable with your configuration file to begin the benchmark. REDLINE will handle the rest, providing detailed outputs and statistics upon completion.
+Once configured, simply run the REDLINE executable with your configuration file
+to begin the benchmark. REDLINE will handle the rest, providing detailed
+outputs and statistics upon completion.
 
 ## Usage
 REDLINE has two binaries:
 1. Main `redline` command to run benchmarks and generate statistics
 2. Utility `redline-assist` command to perform some utility functions before or after benchmark
 
-Although you can use them directly, it's more convenient to employ a helper make file to orchestrate the interaction with those binaries.
+Although you can use them directly, it's more convenient to employ a helper
+make file to orchestrate the interaction with those binaries.
 
 ### Build the binaries
 ```bash

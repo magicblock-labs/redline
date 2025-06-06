@@ -21,12 +21,7 @@ pubkey = { workspace = true }
 serde = { workspace = true }
 bincode = { workspace = true }
 sha2 = "0.10"
-
-[dependencies.sdk]
-version = "0.2.4"
-package = "ephemeral-rollups-sdk"
-git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git"
-rev = "2e31e33"
+sdk = { workspace = true }
 
 [dev-dependencies]
 solana-program-test = "2.2"

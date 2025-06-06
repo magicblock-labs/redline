@@ -52,6 +52,8 @@ mode = "get-account-info"
 
 # TPS Benchmark settings
 [tps-benchmark]
+# whether to perform TPS benchmark, either RPS or TPS benchmark should be enabled or both
+enabled = true
 # Number of iterations for the benchmark
 iterations = 100000
 # The desired throughput for transaction submission to the target ER node,
@@ -68,24 +70,25 @@ concurrency = 64
 preflight-check = false
 
 
-# Mode of tps benchmark, options:
+# Mode of tps benchmark
+# this is the most basic transaction which writes some bytes to a single account
 mode = "simple-byte-set"
 
 # Alternative modes are:
 #--------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------
+#-------------------------------### TRIGGER-CLONES ###----------------------------------
 # every clone-frequency-secs, and airdrop will be performed on of the readonly
 # accounts on chain, thus triggering clone of account on ER 
 
 # mode = { trigger-clones = { clone-frequency-secs = 1, accounts-count = 16 } }
 
-#--------------------------------------------------------------------------------
+#-------------------------------### HIGH-CU ###-------------------------------
 # performs an expensive hash compute in loop (iters times), 28 iterations
 # consume almost the entirety of 200K CUs
 
 # mode = { high-cu-cost = { iters = 8 } }
 
-#--------------------------------------------------------------------------------
+#-------------------------------### READ-WRITE ###--------------------------------
 # performs data copy operation between accounts in the pool, each transaction
 # involves 2 accounts, one readable, one writable, thus high number of
 # transactions using intersecting set of accounts will create pressure on
@@ -93,7 +96,20 @@ mode = "simple-byte-set"
 
 # mode = { read-write = { accounts-count = 32 } }
 
-#--------------------------------------------------------------------------------
+#-------------------------------### READ-ONLY ###-----------------------------------
+# Uses provided accounts in the pool to read the length of the data field an log it, 
+# all of the accounts are used in read only mode, so multiple transactions of this 
+# kind can run in parallel on multi-threaded scheduler
+
+# mode = { read-only = { accounts-count = 32, accounts-per-transaction = 8 } }
+
+#-------------------------------### COMMIT ###------------------------------------
+# Sends commit transactions to the ER choosinng accounts-per-transaction from
+# the pool of accounts-count 
+
+# mode = { commit = { accounts-count = 32, accounts-per-transaction = 8 } }
+
+#-------------------------------### MIXED ###--------------------------------------
 # a combination of various benchmarking modes, to simulate more real world scenarios
 
 # mode = { mixed = [ "simple-byte-set", { high-cu-cost = { iters = 28 } } ] }

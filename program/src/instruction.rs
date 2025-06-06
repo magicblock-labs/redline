@@ -4,6 +4,9 @@ use solana_program::pubkey::Pubkey;
 /// Instructions to simulate some activity
 #[derive(Serialize, Deserialize)]
 pub enum Instruction {
+    CommitAccounts {
+        id: u64,
+    },
     /// Initialize writable account
     InitAccount {
         space: u32,

@@ -26,6 +26,7 @@ hash = { package = "solana-hash", version = "2.2" }
 
 program = { path = "../program", package = "redline-program" }
 core = { path = "../core", package = "redline-core" }
+sdk = { workspace = true }
 
 json = { workspace = true }
 serde = { workspace = true }

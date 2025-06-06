@@ -9,6 +9,7 @@ use keypair::Keypair;
 use program::{instruction::Instruction, utils::derive_pda};
 use pubkey::Pubkey;
 use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
+use sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
 use signer::Signer;
 use transaction::Transaction;
 
@@ -53,6 +54,19 @@ pub struct TriggerCloneTransaction {
 pub struct ReadWriteAccountsTransaction {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
+}
+
+pub struct ReadOnlyTransaction {
+    accounts: Vec<Pubkey>,
+    rng: ThreadRng,
+    count: usize,
+}
+
+pub struct CommitTransaction {
+    accounts: Vec<Pubkey>,
+    rng: ThreadRng,
+    count: usize,
+    payer: Pubkey,
 }
 
 impl TransactionProvider for SimpleTransaction {
@@ -127,6 +141,46 @@ impl TransactionProvider for TriggerCloneTransaction {
     }
 }
 
+impl TransactionProvider for ReadOnlyTransaction {
+    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+        let accounts = self
+            .accounts
+            .choose_multiple(&mut self.rng, self.count)
+            .copied();
+        let ix = Instruction::ReadAccountsData { id };
+        let accounts = accounts
+            .map(|acc| AccountMeta::new_readonly(acc, false))
+            .collect();
+        self.wrapix(ix, accounts)
+    }
+
+    fn accounts(&self) -> Vec<Pubkey> {
+        self.accounts.clone()
+    }
+}
+
+impl TransactionProvider for CommitTransaction {
+    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+        let ix = Instruction::CommitAccounts { id };
+        let mut accounts = vec![
+            AccountMeta::new(self.payer, true),
+            AccountMeta::new(MAGIC_CONTEXT_ID, false),
+            AccountMeta::new_readonly(MAGIC_PROGRAM_ID, false),
+        ];
+        accounts.extend(
+            self.accounts
+                .choose_multiple(&mut self.rng, self.count)
+                .copied()
+                .map(|acc| AccountMeta::new_readonly(acc, false)),
+        );
+        self.wrapix(ix, accounts)
+    }
+
+    fn accounts(&self) -> Vec<Pubkey> {
+        self.accounts.clone()
+    }
+}
+
 impl TransactionProvider for Vec<Box<dyn TransactionProvider>> {
     fn generateix(&mut self, id: u64) -> SolanaInstruction {
         let index = id as usize % self.len();
@@ -187,5 +241,32 @@ pub fn make_provider(
             pda: derive_pda(base, space, 0).0,
             iters: *iters,
         }),
+        TpsBenchMode::ReadOnly {
+            accounts_count,
+            accounts_per_transaction,
+        } => {
+            let accounts = (1..=*accounts_count)
+                .map(|seed| derive_pda(base, space, seed).0)
+                .collect();
+            Box::new(ReadOnlyTransaction {
+                accounts,
+                count: *accounts_per_transaction as usize,
+                rng: thread_rng(),
+            })
+        }
+        TpsBenchMode::Commit {
+            accounts_count,
+            accounts_per_transaction,
+        } => {
+            let accounts = (1..=*accounts_count)
+                .map(|seed| derive_pda(base, space, seed).0)
+                .collect();
+            Box::new(CommitTransaction {
+                accounts,
+                count: *accounts_per_transaction as usize,
+                rng: thread_rng(),
+                payer: base,
+            })
+        }
     }
 }

@@ -5,12 +5,12 @@ use core::{
 };
 use std::{fs::File, path::PathBuf, rc::Rc, thread::JoinHandle, time::SystemTime};
 
-use get_requests::RpsBenchRunner;
 use json::writer::BufferedWriter;
 use keypair::Keypair;
-use send_txn::TpsBenchRunner;
+use rps_runner::RpsBenchRunner;
 use signer::{EncodableKey, Signer};
 use tokio::{runtime, sync::broadcast, task::LocalSet};
+use tps_runner::TpsBenchRunner;
 
 fn main() -> BenchResult<()> {
     let config = Config::from_args()?;
@@ -126,10 +126,10 @@ impl ShutDownSender {
 mod blockhash;
 mod confirmation;
 mod extractor;
-mod get_requests;
 mod http;
 mod payload;
 mod rps;
-mod send_txn;
+mod rps_runner;
+mod tps_runner;
 mod transaction;
 mod websocket;
