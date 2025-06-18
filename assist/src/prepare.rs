@@ -30,7 +30,7 @@ struct Preparator {
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
     let config = Config::from_path(path)?;
     let keypairs: Vec<_> = (1..=config.parallelism)
-        .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n:>03}.json")))
+        .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n}.json")))
         .collect::<BenchResult<_>>()?;
     let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))?;
     let client = RpcClient::new(config.connection.chain_url.0.to_string());
@@ -120,7 +120,7 @@ impl Preparator {
         let derive_accounts = |count: u8| -> Vec<Pda> {
             self.keypairs
                 .iter()
-                .flat_map(|k| (0..count).map(move |seed| (k, seed)))
+                .flat_map(|k| (1..=count).map(move |seed| (k, seed)))
                 .map(|(k, seed)| {
                     let (pubkey, bump) = derive_pda(k.pubkey(), space, seed);
                     Pda {

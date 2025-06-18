@@ -212,7 +212,7 @@ pub fn make_provider(
                 .collect::<Vec<_>>(),
         ),
         TpsBenchMode::SimpleByteSet => Box::new(SimpleTransaction {
-            pda: derive_pda(base, space, 0).0,
+            pda: derive_pda(base, space, 1).0,
         }),
         TpsBenchMode::TriggerClones {
             clone_frequency_secs,
@@ -222,7 +222,7 @@ pub fn make_provider(
                 .map(|seed| derive_pda(base, space, seed).0)
                 .collect();
             Box::new(TriggerCloneTransaction {
-                pda: derive_pda(base, space, 0).0,
+                pda: derive_pda(base, space, 1).0,
                 ro_accounts,
                 frequency: Duration::from_secs(*clone_frequency_secs),
                 last_chain_update: Instant::now(),
@@ -238,7 +238,7 @@ pub fn make_provider(
             })
         }
         TpsBenchMode::HighCuCost { iters } => Box::new(ExpensiveTransaction {
-            pda: derive_pda(base, space, 0).0,
+            pda: derive_pda(base, space, 1).0,
             iters: *iters,
         }),
         TpsBenchMode::ReadOnly {

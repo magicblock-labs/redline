@@ -1,6 +1,7 @@
 /target
-redline.json
 /program/fixtures/redline-keypair.json
 /runs
+/keypairs
 config.toml
+redline.json
 

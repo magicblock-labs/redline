@@ -5,7 +5,7 @@ REDLINE=$(TARGET_DIR)/redline
 REDLINE_ASSIST=$(TARGET_DIR)/redline-assist
 
 remove-artifacts:
-	rm $(REDLINE) $(REDLINE_ASSIST)
+	@-rm $(REDLINE) $(REDLINE_ASSIST)
 
 build: remove-artifacts $(REDLINE) $(REDLINE_ASSIST)
 

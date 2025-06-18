@@ -15,7 +15,7 @@ use tps_runner::TpsBenchRunner;
 fn main() -> BenchResult<()> {
     let config = Config::from_args()?;
     let keypairs: Vec<_> = (1..=config.parallelism)
-        .map(|n| Keypair::read_from_file(format!("keypairs/{n:>03}.json")))
+        .map(|n| Keypair::read_from_file(format!("keypairs/{n}.json")))
         .collect::<BenchResult<_>>()?;
     let mut tps_handles = Vec::new();
     let mut rps_handles = Vec::new();
