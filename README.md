@@ -40,7 +40,8 @@ infrastructure.
     simultaneous read and write operations, with multiple transactions using
     intersecting set of accounts, thus creating lock contention.
   - **Mixed Mode**: Combines multiple transaction types to simulate complex
-    workloads.
+    workloads, allowing to specify the ratio of transactions from different
+    modes
   - **Read Only**: Accounts in the transaction are used as read only and thus
     can be used to test multiple such transactions running in parallel without
     locking on the same accounts
@@ -152,7 +153,7 @@ enabled = true
 iterations = 15000
 tps = 100
 concurrency = 16
-mode = "simple-byte-set"
+mode = { simple-byte-set = { accounts-count = 8 } }
 
 [subscription]
 subscribe-to-accounts = true

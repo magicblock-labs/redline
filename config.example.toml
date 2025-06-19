@@ -71,8 +71,9 @@ preflight-check = false
 
 
 # Mode of tps benchmark
-# this is the most basic transaction which writes some bytes to a single account
-mode = "simple-byte-set"
+# this is the most basic transaction which writes some bytes 
+# to a single account from the pool of the provided accounts
+# mode = { simple-byte-set = { accounts-count = 8 } }
 
 # Alternative modes are:
 #--------------------------------------------------------------------------------
@@ -110,9 +111,20 @@ mode = "simple-byte-set"
 # mode = { commit = { accounts-count = 32, accounts-per-transaction = 8 } }
 
 #-------------------------------### MIXED ###--------------------------------------
-# a combination of various benchmarking modes, to simulate more real world scenarios
+# a combination of various benchmarking modes, to simulate more real world
+# scenarios, the weight argument specifies the frequency of the transaction
+# from the given mode to be generated, in the example below 50% of transactions
+# will be from high-cu-cost, 30% from simple-byte-set and 20% from read-write
 
-# mode = { mixed = [ "simple-byte-set", { high-cu-cost = { iters = 28 } } ] }
+[[tps-benchmark.mode.mixed]] =  
+mode = { high-cu-cost = { accounts-count = 8, iters = 23 } }
+weight = 50 
+[[tps-benchmark.mode.mixed]]
+mode = { simple-byte-set = { accounts-count = 8 } }
+weight = 30
+[[tps-benchmark.mode.mixed]] =  
+mode = { read-write = { accounts-count = 32 } }
+weight = 20 
 
 [confirmations]
 # Subscription settings

@@ -12,13 +12,18 @@ pub type BenchResult<T> = Result<T, DynError>;
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum TpsBenchMode {
-    SimpleByteSet,
+    #[serde(rename_all = "kebab-case")]
+    SimpleByteSet {
+        accounts_count: u8,
+    },
     #[serde(rename_all = "kebab-case")]
     TriggerClones {
         clone_frequency_secs: u64,
         accounts_count: u8,
     },
+    #[serde(rename_all = "kebab-case")]
     HighCuCost {
+        accounts_count: u8,
         iters: u32,
     },
     #[serde(rename_all = "kebab-case")]
@@ -35,7 +40,14 @@ pub enum TpsBenchMode {
         accounts_count: u8,
         accounts_per_transaction: u8,
     },
-    Mixed(Vec<Self>),
+    Mixed(Vec<WeightedTpsBenchMode>),
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct WeightedTpsBenchMode {
+    pub mode: TpsBenchMode,
+    pub weight: u8,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

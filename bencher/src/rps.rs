@@ -30,18 +30,19 @@ impl RpsManager {
     }
     pub async fn tick(&mut self) -> OwnedSemaphorePermit {
         let elapsed = self.epoch.elapsed();
-        if elapsed > ONESEC {
-            self.epoch = Instant::now();
-            if self.count > 0 {
-                self.observations.push(self.count);
-            }
-            self.count = 0;
-        }
         self.count += 1;
+        if elapsed >= ONESEC {
+            self.epoch = Instant::now();
+            self.observations.push(self.count);
+            self.count = 1;
+        }
         let remaining = (self.rps - self.count).max(1) as u64;
-        let lag =
+        let mut lag =
             Duration::from_millis(1000u64.saturating_sub(elapsed.as_millis() as u64) / remaining);
         if lag >= ONEMS {
+            tokio::time::sleep(lag).await;
+        } else if self.count >= self.rps {
+            lag = Duration::from_millis(1000u64.saturating_sub(elapsed.as_millis() as u64));
             tokio::time::sleep(lag).await;
         }
         self.permits.clone().acquire_owned().await.unwrap()

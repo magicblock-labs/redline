@@ -8,7 +8,10 @@ use json::LazyValue;
 use keypair::Keypair;
 use program::{instruction::Instruction, utils::derive_pda};
 use pubkey::Pubkey;
-use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
+use rand::{
+    distributions::WeightedIndex, prelude::Distribution, rngs::ThreadRng, seq::SliceRandom,
+    thread_rng,
+};
 use sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
 use signer::Signer;
 use transaction::Transaction;
@@ -36,11 +39,11 @@ pub trait TransactionProvider {
 }
 
 pub struct SimpleTransaction {
-    pda: Pubkey,
+    pdas: Vec<Pubkey>,
 }
 
 pub struct ExpensiveTransaction {
-    pda: Pubkey,
+    pdas: Vec<Pubkey>,
     iters: u32,
 }
 
@@ -69,30 +72,38 @@ pub struct CommitTransaction {
     payer: Pubkey,
 }
 
+pub struct MixedTransactionProviders {
+    providers: Vec<Box<dyn TransactionProvider>>,
+    rng: ThreadRng,
+    distribution: WeightedIndex<u8>,
+}
+
 impl TransactionProvider for SimpleTransaction {
     fn generateix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::SimpleByteSet { id };
-        let accounts = vec![AccountMeta::new(self.pda, false)];
+        let pda = self.pdas[id as usize % self.pdas.len()];
+        let accounts = vec![AccountMeta::new(pda, false)];
         self.wrapix(ix, accounts)
     }
     fn accounts(&self) -> Vec<Pubkey> {
-        vec![self.pda]
+        self.pdas.clone()
     }
 }
 
 impl TransactionProvider for ExpensiveTransaction {
     fn generateix(&mut self, id: u64) -> SolanaInstruction {
+        let init = self.pdas[id as usize % self.pdas.len()];
         let ix = Instruction::ExpensiveHashCompute {
             id,
-            init: self.pda,
+            init,
             iters: self.iters,
         };
-        let accounts = vec![AccountMeta::new(self.pda, false)];
+        let accounts = vec![AccountMeta::new(init, false)];
         self.wrapix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        vec![self.pda]
+        self.pdas.clone()
     }
 }
 
@@ -181,19 +192,19 @@ impl TransactionProvider for CommitTransaction {
     }
 }
 
-impl TransactionProvider for Vec<Box<dyn TransactionProvider>> {
+impl TransactionProvider for MixedTransactionProviders {
     fn generateix(&mut self, id: u64) -> SolanaInstruction {
-        let index = id as usize % self.len();
-        let generator = &mut self[index];
+        let index = self.distribution.sample(&mut self.rng);
+        let generator = &mut self.providers[index];
         generator.generateix(id)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        self.iter().flat_map(|tp| tp.accounts()).collect()
+        self.providers.iter().flat_map(|tp| tp.accounts()).collect()
     }
 
     fn bookkeep(&mut self, chain: &mut Connection, iteration: u64) {
-        for tp in self.iter_mut() {
+        for tp in self.providers.iter_mut() {
             tp.bookkeep(chain, iteration);
         }
     }
@@ -205,14 +216,24 @@ pub fn make_provider(
     space: u32,
 ) -> Box<dyn TransactionProvider> {
     match mode {
-        TpsBenchMode::Mixed(modes) => Box::new(
-            modes
+        TpsBenchMode::Mixed(modes) => {
+            let providers = modes
                 .iter()
-                .map(|m| make_provider(m, base, space))
-                .collect::<Vec<_>>(),
-        ),
-        TpsBenchMode::SimpleByteSet => Box::new(SimpleTransaction {
-            pda: derive_pda(base, space, 1).0,
+                .map(|m| make_provider(&m.mode, base, space))
+                .collect::<Vec<_>>();
+            let weights = modes.iter().map(|m| m.weight).collect::<Vec<_>>();
+            let distribution = WeightedIndex::new(weights).unwrap();
+            let rng = thread_rng();
+            Box::new(MixedTransactionProviders {
+                providers,
+                distribution,
+                rng,
+            })
+        }
+        TpsBenchMode::SimpleByteSet { accounts_count } => Box::new(SimpleTransaction {
+            pdas: (1..=*accounts_count)
+                .map(|i| derive_pda(base, space, i).0)
+                .collect(),
         }),
         TpsBenchMode::TriggerClones {
             clone_frequency_secs,
@@ -237,8 +258,13 @@ pub fn make_provider(
                 rng: thread_rng(),
             })
         }
-        TpsBenchMode::HighCuCost { iters } => Box::new(ExpensiveTransaction {
-            pda: derive_pda(base, space, 1).0,
+        TpsBenchMode::HighCuCost {
+            accounts_count,
+            iters,
+        } => Box::new(ExpensiveTransaction {
+            pdas: (1..=*accounts_count)
+                .map(|i| derive_pda(base, space, i).0)
+                .collect(),
             iters: *iters,
         }),
         TpsBenchMode::ReadOnly {
