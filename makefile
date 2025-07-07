@@ -3,6 +3,7 @@ CONFIG ?= config.toml
 TARGET_DIR = target/release
 REDLINE=$(TARGET_DIR)/redline
 REDLINE_ASSIST=$(TARGET_DIR)/redline-assist
+export RUST_LOG = info
 
 remove-artifacts:
 	@-rm $(REDLINE) $(REDLINE_ASSIST)

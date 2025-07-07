@@ -3,9 +3,13 @@ use std::{fs, path::PathBuf};
 
 use args::AssistCommand;
 use structopt::StructOpt;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> BenchResult<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
     let cmd = AssistCommand::from_args();
     match cmd {
         AssistCommand::Prepare { config } => prepare::prepare(config).await?,
@@ -23,7 +27,9 @@ async fn main() -> BenchResult<()> {
 
 fn latest_run_output_path(mut count: usize) -> PathBuf {
     let dir = fs::read_dir(RUNS_OUTPUT_PATH)
-        .inspect_err(|err| eprintln!("failed to read output directory for benchmark runs: {err}"))
+        .inspect_err(
+            |error| tracing::error!(%error, "failed to read output directory for benchmark runs"),
+        )
         .unwrap();
     let mut outputs: Vec<_> = dir
         .filter_map(|e| e.map(|e| e.path()).ok().filter(|p| p.is_file()))

@@ -32,6 +32,11 @@ signer = { package = "solana-signer", version = "2.2" }
 instruction = { package = "solana-instruction", version = "2.2" }
 transaction = { package = "solana-transaction", version = "2", features = [ "bincode" ] }
 
+# logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+
 [workspace.dependencies.sdk]
 # version = "0.2.4"
 package = "ephemeral-rollups-sdk"

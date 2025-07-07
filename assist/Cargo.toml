@@ -31,5 +31,7 @@ tokio = { workspace = true }
 core = { path = "../core", package = "redline-core" }
 program = { path = "../program", package = "redline-program" }
 
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 

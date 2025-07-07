@@ -27,6 +27,7 @@ impl Config {
             .nth(1)
             .ok_or("usage: redline config.toml")?
             .into();
+        tracing::info!("using config file at {path:?} to run the benchmark");
         Self::from_path(path)
     }
 }

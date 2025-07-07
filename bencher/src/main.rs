@@ -11,8 +11,13 @@ use rps_runner::RpsBenchRunner;
 use signer::{EncodableKey, Signer};
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 use tps_runner::TpsBenchRunner;
+use tracing_subscriber::EnvFilter;
 
 fn main() -> BenchResult<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let config = Config::from_args()?;
     let keypairs: Vec<_> = (1..=config.parallelism)
         .map(|n| Keypair::read_from_file(format!("keypairs/{n}.json")))
@@ -95,7 +100,7 @@ fn main() -> BenchResult<()> {
         .open(&output)
         .map(BufferedWriter::new)?;
     json::to_writer(writer, &stats)?;
-    println!(
+    tracing::info!(
         "The results of the benchmark are written to {}",
         output.display()
     );

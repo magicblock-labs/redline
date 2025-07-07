@@ -43,7 +43,7 @@ impl BlockHashProvider {
                 _ = interval.tick() => {
                     match Self::request(&mut ephem).await {
                         Ok(h) => { hash.replace(h); },
-                        Err(err) => eprintln!("failed to request hash from ephem: {err}"),
+                        Err(err) => tracing::warn!("failed to request hash from ephem: {err}"),
                     };
                 }
                 _ = shutdown.recv() => {

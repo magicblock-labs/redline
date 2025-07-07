@@ -121,9 +121,9 @@ impl RpsBenchRunner {
         for i in 0..self.iterations {
             self.step(i).await;
         }
-        println!(
-            "The Benchmark run is complete, number of requests sent: {}",
-            self.iterations
+        tracing::info!(
+            iterations = self.iterations,
+            "The TPS Benchmark run is complete",
         );
 
         RpsBenchResults {
@@ -152,10 +152,10 @@ impl RpsBenchRunner {
         let task = async move {
             match response.resolve().await {
                 Ok(Some(false)) => {
-                    eprintln!("get request failed to be processed");
+                    tracing::warn!("get request failed to be processed");
                 }
                 Err(err) => {
-                    eprintln!("get request failed to be delivered: {err}");
+                    tracing::warn!("get request failed to be delivered: {err}");
                 }
                 _ => (),
             }

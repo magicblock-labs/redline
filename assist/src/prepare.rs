@@ -3,7 +3,7 @@ use core::{
     consts::KEYPAIRS_PATH,
     types::{BenchResult, TpsBenchMode},
 };
-use std::path::PathBuf;
+use std::{cell::Cell, collections::HashSet, hash::Hash, path::PathBuf, rc::Rc};
 
 use commitment::CommitmentConfig;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
@@ -15,6 +15,7 @@ use program::{
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
 use signer::{EncodableKey, Signer};
+use tokio::task::LocalSet;
 use transaction::Transaction;
 
 const LAMPORTS_PER_BENCH: u64 = 500_000_000;
@@ -23,17 +24,19 @@ const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
 struct Preparator {
     config: Config,
     vault: Keypair,
-    client: RpcClient,
+    client: Rc<RpcClient>,
     keypairs: Vec<Keypair>,
 }
 
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
+    tracing::info!("using config file at {path:?} to prepare the benchmark");
     let config = Config::from_path(path)?;
     let keypairs: Vec<_> = (1..=config.parallelism)
         .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n}.json")))
         .collect::<BenchResult<_>>()?;
     let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))?;
-    let client = RpcClient::new(config.connection.chain_url.0.to_string());
+    let client =
+        RpcClient::new_with_commitment(config.connection.chain_url.0.to_string(), CONFIRMED).into();
     let preparator = Preparator {
         config,
         vault,
@@ -48,11 +51,15 @@ pub async fn prepare(path: PathBuf) -> BenchResult<()> {
 
 impl Preparator {
     async fn fund(&self) -> BenchResult<()> {
-        for kp in &self.keypairs {
+        let count = self.keypairs.len();
+        for (i, kp) in self.keypairs.iter().enumerate() {
             let pk = &kp.pubkey();
             let lamports = self.client.get_balance(pk).await?;
             if lamports < LAMPORTS_PER_BENCH {
-                println!("Funding keypair for benchmark: {pk}");
+                tracing::info!(
+                    "{:>03}/{count:>03} Funding keypair for benchmark: {pk}",
+                    i + 1
+                );
                 self.transfer(pk, LAMPORTS_PER_BENCH - lamports).await?;
             }
         }
@@ -71,45 +78,56 @@ impl Preparator {
         } else {
             vec![]
         };
-        for pda in tps_accounts.into_iter().chain(rps_accounts.into_iter()) {
-            let response = self
-                .client
-                .get_account_with_commitment(&pda.pubkey, Default::default())
-                .await?;
-            let hash = self.client.get_latest_blockhash().await?;
-            match response.value {
-                Some(acc) if acc.owner == DELEGATION_PROGRAM_ID => {
-                    continue;
+        let accounts = tps_accounts
+            .into_iter()
+            .chain(rps_accounts.into_iter())
+            .collect::<HashSet<_>>();
+        let count = accounts.len();
+        let local = LocalSet::new();
+        let counter = Rc::new(Cell::new(0));
+        for pda in accounts {
+            let client = self.client.clone();
+            let counter = counter.clone();
+            let fut = async move {
+                let response = client
+                    .get_account_with_commitment(&pda.pubkey, Default::default())
+                    .await?;
+                let hash = client.get_latest_blockhash().await?;
+                match response.value {
+                    Some(acc) if acc.owner == DELEGATION_PROGRAM_ID => {}
+                    None => {
+                        let ix = Instruction::InitAccount {
+                            space,
+                            seed: pda.seed,
+                            bump: pda.bump,
+                        };
+                        let payer = pda.payer.pubkey();
+                        let metas = vec![
+                            AccountMeta::new(payer, true),
+                            AccountMeta::new(pda.pubkey, false),
+                            AccountMeta::new_readonly(Pubkey::default(), false),
+                        ];
+                        let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
+                        let txn = Transaction::new_signed_with_payer(
+                            &[ix],
+                            Some(&payer),
+                            &[&pda.payer],
+                            hash,
+                        );
+                        client.send_and_confirm_transaction(&txn).await?;
+                        Self::delegate(client, &pda).await?;
+                    }
+                    _ => {}
                 }
-                None => {
-                    println!("Initializing PDA: {}", pda.pubkey);
-                    let ix = Instruction::InitAccount {
-                        space,
-                        seed: pda.seed,
-                        bump: pda.bump,
-                    };
-                    let payer = pda.payer.pubkey();
-                    let metas = vec![
-                        AccountMeta::new(payer, true),
-                        AccountMeta::new(pda.pubkey, false),
-                        AccountMeta::new_readonly(Pubkey::default(), false),
-                    ];
-                    let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
-                    let txn = Transaction::new_signed_with_payer(
-                        &[ix],
-                        Some(&payer),
-                        &[&pda.payer],
-                        hash,
-                    );
-                    self.client
-                        .send_and_confirm_transaction_with_spinner_and_commitment(&txn, CONFIRMED)
-                        .await?;
-                }
-                _ => {}
-            }
-            println!("Delegating PDA: {}", pda.pubkey);
-            self.delegate(&pda).await?;
+                let c = counter.get() + 1;
+                counter.set(c);
+                tracing::info!("{c:>03}/{count:>03} PDA {} is ready", pda.pubkey);
+                BenchResult::Ok(())
+            };
+            local.spawn_local(fut);
         }
+        local.await;
+        tracing::info!("Prepared {count} PDA accounts");
         Ok(())
     }
 
@@ -169,10 +187,10 @@ impl Preparator {
             .collect()
     }
 
-    async fn delegate(&self, pda: &Pda) -> BenchResult<()> {
+    async fn delegate(client: Rc<RpcClient>, pda: &Pda) -> BenchResult<()> {
         let ix = Instruction::Delegate { seed: pda.seed };
         let payer = pda.payer.pubkey();
-        let hash = self.client.get_latest_blockhash().await?;
+        let hash = client.get_latest_blockhash().await?;
 
         let accounts = DelegateAccounts::new(pda.pubkey, program::id());
         let metas = DelegateAccountMetas::from(accounts).into_vec(payer);
@@ -180,18 +198,14 @@ impl Preparator {
         let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
         let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&pda.payer], hash);
 
-        self.client
-            .send_and_confirm_transaction_with_spinner_and_commitment(&txn, CONFIRMED)
-            .await?;
+        client.send_and_confirm_transaction(&txn).await?;
         Ok(())
     }
 
     async fn transfer(&self, to: &Pubkey, amount: u64) -> BenchResult<()> {
         let hash = self.client.get_latest_blockhash().await?;
         let txn = systransaction::transfer(&self.vault, to, amount, hash);
-        self.client
-            .send_and_confirm_transaction_with_spinner_and_commitment(&txn, CONFIRMED)
-            .await?;
+        self.client.send_and_confirm_transaction(&txn).await?;
         Ok(())
     }
 }
@@ -201,4 +215,18 @@ struct Pda {
     pubkey: Pubkey,
     seed: u8,
     bump: u8,
+}
+
+impl PartialEq for Pda {
+    fn eq(&self, other: &Self) -> bool {
+        self.pubkey.eq(&other.pubkey)
+    }
+}
+
+impl Eq for Pda {}
+
+impl Hash for Pda {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.pubkey.hash(state);
+    }
 }

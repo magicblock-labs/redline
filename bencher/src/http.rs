@@ -188,7 +188,7 @@ where
         let result = match &data {
             Data::Empty => return Ok(None),
             Data::SingleChunk(chunk) => json::get(chunk, ["result"]).inspect_err(|_| {
-                eprintln!("failed to parse response: {}", unsafe {
+                tracing::warn!("failed to parse response: {}", unsafe {
                     std::str::from_utf8_unchecked(chunk)
                 })
             })?,

@@ -66,7 +66,7 @@ impl TpsBenchRunner {
 
         let blockhash = BlockHashProvider::new(ephem, shutdown.listener())
             .await
-            .inspect_err(|err| eprintln!("failed to create blockhash provider: {err}"))?;
+            .inspect_err(|error| tracing::error!(error, "failed to create blockhash provider"))?;
         let ephem = ConnectionPool::new(&config.connection).await?;
 
         let tps_manager =
@@ -146,9 +146,9 @@ impl TpsBenchRunner {
             self.transaction_provider.bookkeep(&mut self.chain, i);
             self.step(i).await;
         }
-        println!(
-            "The TPS Benchmark run is complete, number of transaction sent: {}",
-            self.iterations
+        tracing::info!(
+            iterations = self.iterations,
+            "The TPS Benchmark run is complete",
         );
 
         TpsBenchResults {
@@ -209,10 +209,10 @@ impl TpsBenchRunner {
         let task = async move {
             match response.resolve().await {
                 Ok(Some(false)) => {
-                    eprintln!("transaction failed to be executed");
+                    tracing::warn!("transaction failed to be executed");
                 }
                 Err(err) => {
-                    eprintln!("transaction failed to be delivered: {err}");
+                    tracing::error!("transaction failed to be delivered: {err}");
                 }
                 _ => (),
             }
