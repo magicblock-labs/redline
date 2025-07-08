@@ -54,7 +54,7 @@ pub struct WeightedTpsBenchMode {
 #[serde(rename_all = "kebab-case")]
 pub enum RpsBenchMode {
     GetAccountInfo,
-    GetMutlipleAccounts,
+    GetMultipleAccounts,
     GetBalance,
     GetTokenAccountBalance,
     Mixed(Vec<Self>),

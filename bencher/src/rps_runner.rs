@@ -175,7 +175,7 @@ fn make_provider(
     use RpsBenchMode::*;
     match mode {
         GetAccountInfo => Box::new(GetAccountInfoRequest { accounts, encoding }),
-        GetMutlipleAccounts => Box::new(GetMultipleAccountsRequest { accounts, encoding }),
+        GetMultipleAccounts => Box::new(GetMultipleAccountsRequest { accounts, encoding }),
         GetBalance => Box::new(GetBalanceRequest { accounts }),
         GetTokenAccountBalance => Box::new(GetTokenAccountBalanceRequest { accounts }),
         Mixed(modes) => {

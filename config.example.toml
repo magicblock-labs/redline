@@ -48,7 +48,7 @@ mode = "get-account-info"
 # mode = "get-multiple-accounts"
 # mode = "get-token-account-balance"
 # mode = "get-balance"
-# mode = { combined = [ "get-account-info", "get-balance" ] }
+# mode = { mixed = [ "get-account-info", "get-balance" ] }
 
 # TPS Benchmark settings
 [tps-benchmark]
