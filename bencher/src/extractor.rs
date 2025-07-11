@@ -23,7 +23,7 @@ pub fn account_update_extractor(value: LazyValue) -> Option<u64> {
 }
 
 pub fn value_extractor(value: LazyValue) -> Option<bool> {
-    let v = value.get("value").map(|v| v.is_object());
+    let v = value.get("value").map(|_| true);
     if !v.unwrap_or_default() {
         tracing::debug!(%value, "got invalid value for an rpc get request");
     }

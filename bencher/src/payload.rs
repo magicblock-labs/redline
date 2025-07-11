@@ -57,6 +57,7 @@ pub fn get_account_info(pubkey: Pubkey, encoding: AccountEncoding, id: u64) -> S
 }
 
 pub fn get_multiple_accounts(pubkeys: &[Pubkey], encoding: AccountEncoding, id: u64) -> String {
+    let pubkeys: Vec<String> = pubkeys.iter().map(|pk| pk.to_string()).collect();
     format!(
         r#"{{"jsonrpc":"2.0","id":{id},"method":"getMultipleAccounts","params":[{pubkeys:?},{{"encoding":"{}"}}]}}"#,
         encoding.as_str()
@@ -64,11 +65,11 @@ pub fn get_multiple_accounts(pubkeys: &[Pubkey], encoding: AccountEncoding, id: 
 }
 
 pub fn get_balance(pubkey: Pubkey, id: u64) -> String {
-    format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"getBalance","params":[{pubkey}]}}"#,)
+    format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"getBalance","params":["{pubkey}"]}}"#,)
 }
 
 pub fn get_token_account_balance(pubkey: Pubkey, id: u64) -> String {
     format!(
-        r#"{{"jsonrpc":"2.0","id":{id},"method":"getTokenAccountBalance","params":[{pubkey}]}}"#,
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"getTokenAccountBalance","params":["{pubkey}"]}}"#,
     )
 }
