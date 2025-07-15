@@ -237,10 +237,8 @@ impl TpsBenchRunner {
         let progress = current as f64 / self.iterations as f64;
         let pos = (bar_width as f64 * progress).round() as usize;
 
-        // Unicode block for smooth bar
         let filled = "█";
         let empty = "░";
-        // Emojis
         let start_emoji = "🚀 ";
         let progress_emoji = " 🔄";
         let finish_emoji = " ✅";
@@ -263,10 +261,8 @@ impl TpsBenchRunner {
         });
 
         print!(
-            "\r{} {:>3}% ({}/{})",
-            bar,
+            "\r{bar} {:>3}% ({current}/{})",
             (progress * 100.0) as usize,
-            current,
             self.iterations
         );
         if current == self.iterations {
