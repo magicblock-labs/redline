@@ -144,6 +144,7 @@ impl TpsBenchRunner {
     pub async fn run(mut self) -> TpsBenchResults {
         for i in 0..self.iterations {
             self.transaction_provider.bookkeep(&mut self.chain, i);
+            self.print_progress_bar(i + 1);
             self.step(i).await;
         }
         tracing::info!(
@@ -229,6 +230,48 @@ impl TpsBenchRunner {
             drop(shutdown)
         };
         tokio::task::spawn_local(task);
+    }
+
+    fn print_progress_bar(&self, current: u64) {
+        let bar_width = 80;
+        let progress = current as f64 / self.iterations as f64;
+        let pos = (bar_width as f64 * progress).round() as usize;
+
+        // Unicode block for smooth bar
+        let filled = "█";
+        let empty = "░";
+        // Emojis
+        let start_emoji = "🚀 ";
+        let progress_emoji = " 🔄";
+        let finish_emoji = " ✅";
+
+        let mut bar = String::new();
+        bar.push_str(start_emoji);
+
+        for i in 0..bar_width {
+            if i < pos {
+                bar.push_str(filled);
+            } else {
+                bar.push_str(empty);
+            }
+        }
+
+        bar.push_str(if current == self.iterations {
+            finish_emoji
+        } else {
+            progress_emoji
+        });
+
+        print!(
+            "\r{} {:>3}% ({}/{})",
+            bar,
+            (progress * 100.0) as usize,
+            current,
+            self.iterations
+        );
+        if current == self.iterations {
+            println!()
+        }
     }
 }
 

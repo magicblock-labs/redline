@@ -58,7 +58,15 @@ fn print_stats_pretty(stats: &BenchStatistics) {
             let mut inner_content = String::new();
             if let Some(inner_obj) = value.as_object() {
                 for (inner_key, inner_value) in inner_obj {
-                    inner_content.push_str(&format!("{}: {}\n", inner_key, inner_value));
+                    if let Some(value) = inner_value.as_object() {
+                        inner_content.push_str(&format!(
+                            "{}: {}\n",
+                            inner_key,
+                            json::to_string_pretty(value).unwrap()
+                        ));
+                    } else {
+                        inner_content.push_str(&format!("{}: {}\n", inner_key, inner_value));
+                    }
                 }
             } else {
                 inner_content.push_str(&format!("{}: {}\n", key, value));
