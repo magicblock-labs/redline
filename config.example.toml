@@ -44,11 +44,11 @@ concurrency = 50
 accounts-count = 8
 
 # Mode of rps benchmark, options:
-mode = "get-account-info"
+# mode = "get-account-info"
 # mode = "get-multiple-accounts"
 # mode = "get-token-account-balance"
 # mode = "get-balance"
-# mode = { mixed = [ "get-account-info", "get-balance" ] }
+mode = { mixed = [ "get-account-info", "get-balance", "get-multiple-accounts" ] }
 
 # TPS Benchmark settings
 [tps-benchmark]
@@ -116,15 +116,18 @@ preflight-check = false
 # from the given mode to be generated, in the example below 50% of transactions
 # will be from high-cu-cost, 30% from simple-byte-set and 20% from read-write
 
-[[tps-benchmark.mode.mixed]] =  
+[[tps-benchmark.mode.mixed]]   
 mode = { high-cu-cost = { accounts-count = 8, iters = 23 } }
 weight = 50 
 [[tps-benchmark.mode.mixed]]
 mode = { simple-byte-set = { accounts-count = 8 } }
-weight = 30
-[[tps-benchmark.mode.mixed]] =  
+weight = 29
+[[tps-benchmark.mode.mixed]]   
 mode = { read-write = { accounts-count = 32 } }
 weight = 20 
+[[tps-benchmark.mode.mixed]]   
+mode = { commit = { accounts-count = 32, accounts-per-transaction = 2 } }
+weight = 1
 
 [confirmations]
 # Subscription settings
