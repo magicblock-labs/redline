@@ -3,7 +3,7 @@ use core::{
     consts::KEYPAIRS_PATH,
     types::{BenchResult, TpsBenchMode},
 };
-use std::{cell::Cell, collections::HashSet, hash::Hash, path::PathBuf, rc::Rc};
+use std::{cell::Cell, collections::HashSet, fs, hash::Hash, path::PathBuf, rc::Rc};
 
 use commitment::CommitmentConfig;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
@@ -31,16 +31,27 @@ struct Preparator {
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
     tracing::info!("using config file at {path:?} to prepare the benchmark");
     let config = Config::from_path(path)?;
+    Preparator::generate(&config)?;
     let keypairs: Vec<_> = (1..=config.parallelism)
         .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n}.json")))
-        .collect::<BenchResult<_>>()?;
-    let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))?;
+        .collect::<BenchResult<_>>()
+        .inspect_err(|e| tracing::error!("failed to read keypairs for bench: {e}"))?;
+    let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))
+        .inspect_err(|e| tracing::error!("failed to read keypair for vault: {e}"))?;
     let client =
-        RpcClient::new_with_commitment(config.connection.chain_url.0.to_string(), CONFIRMED).into();
+        RpcClient::new_with_commitment(config.connection.chain_url.0.to_string(), CONFIRMED);
+
+    let pk = &vault.pubkey();
+    let lamports = client.get_balance(pk).await?;
+    const FIVE_SOL: u64 = 1_000_000_000 * 5;
+    if lamports < FIVE_SOL {
+        tracing::info!("Air dropping SOLs to vault",);
+        client.request_airdrop(pk, FIVE_SOL).await?;
+    }
     let preparator = Preparator {
         config,
         vault,
-        client,
+        client: client.into(),
         keypairs,
     };
     preparator.fund().await?;
@@ -50,6 +61,26 @@ pub async fn prepare(path: PathBuf) -> BenchResult<()> {
 }
 
 impl Preparator {
+    fn generate(config: &Config) -> BenchResult<()> {
+        if !fs::exists(KEYPAIRS_PATH)? {
+            tracing::info!("Generating benchmark keypairs");
+            fs::create_dir(KEYPAIRS_PATH)?;
+        };
+        for n in 1..=config.parallelism {
+            let path = format!("{KEYPAIRS_PATH}/{n}.json");
+            if fs::exists(&path)? {
+                continue;
+            }
+            Keypair::new().write_to_file(path)?;
+        }
+        let vault = format!("{KEYPAIRS_PATH}/vault.json");
+        if !fs::exists(&vault)? {
+            Keypair::new().write_to_file(vault)?;
+        }
+
+        Ok(())
+    }
+
     async fn fund(&self) -> BenchResult<()> {
         let count = self.keypairs.len();
         for (i, kp) in self.keypairs.iter().enumerate() {
