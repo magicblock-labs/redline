@@ -3,7 +3,9 @@ use core::{
     consts::KEYPAIRS_PATH,
     types::{BenchResult, TpsBenchMode},
 };
-use std::{cell::Cell, collections::HashSet, fs, hash::Hash, path::PathBuf, rc::Rc};
+use std::{
+    cell::Cell, collections::HashSet, fs, hash::Hash, path::PathBuf, rc::Rc, time::Duration,
+};
 
 use commitment::CommitmentConfig;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
@@ -123,10 +125,16 @@ impl Preparator {
                 let response = client
                     .get_account_with_commitment(&pda.pubkey, Default::default())
                     .await?;
-                let hash = client.get_latest_blockhash().await?;
+                let mut attempt = 0;
                 match response.value {
                     Some(acc) if acc.owner == DELEGATION_PROGRAM_ID => {}
-                    None => {
+                    None => loop {
+                        attempt += 1;
+                        tokio::time::sleep(Duration::from_millis(
+                            counter.get() as u64 * 50 * attempt,
+                        ))
+                        .await;
+                        let hash = client.get_latest_blockhash().await?;
                         let ix = Instruction::InitAccount {
                             space,
                             seed: pda.seed,
@@ -145,10 +153,22 @@ impl Preparator {
                             &[&pda.payer],
                             hash,
                         );
-                        client.send_and_confirm_transaction(&txn).await?;
-                        Self::delegate(client, &pda).await?;
+                        if let Err(error) = client.send_and_confirm_transaction(&txn).await {
+                            tracing::error!(%error, "failed to send PDA init transaction");
+                            continue;
+                        }
+                        if let Err(error) = Self::delegate(&client, &pda).await {
+                            tracing::error!(%error, "failed to delegate the PDA");
+                            continue;
+                        }
+                        break;
+                    },
+                    Some(_) => {
+                        while let Err(error) = Self::delegate(&client, &pda).await {
+                            tracing::error!(%error, "failed to delegate the PDA");
+                            tokio::time::sleep(Duration::from_secs(attempt)).await;
+                        }
                     }
-                    _ => {}
                 }
                 let c = counter.get() + 1;
                 counter.set(c);
@@ -218,7 +238,7 @@ impl Preparator {
             .collect()
     }
 
-    async fn delegate(client: Rc<RpcClient>, pda: &Pda) -> BenchResult<()> {
+    async fn delegate(client: &RpcClient, pda: &Pda) -> BenchResult<()> {
         let ix = Instruction::Delegate { seed: pda.seed };
         let payer = pda.payer.pubkey();
         let hash = client.get_latest_blockhash().await?;
