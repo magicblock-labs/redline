@@ -3523,6 +3523,7 @@ dependencies = [
  "solana-instruction",
  "solana-keypair",
  "solana-pubkey",
+ "solana-signature",
  "solana-signer",
  "solana-transaction",
  "sonic-rs",

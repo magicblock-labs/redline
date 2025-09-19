@@ -20,8 +20,12 @@ pub const DELEGATION_PROGRAM_ID: Pubkey = sdk::id();
 pub use sdk::delegate_args::DelegateAccountMetas;
 pub use sdk::delegate_args::DelegateAccounts;
 
+/// The seeds for the Program Derived Address (PDA).
 pub const SEEDS: &[u8] = b"bencher-pda";
 
+/// # Process Instruction
+///
+/// The main entry point for the program, responsible for processing all incoming instructions.
 fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],

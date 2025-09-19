@@ -1,10 +1,6 @@
-use core::types::TpsBenchMode;
-use std::time::{Duration, Instant};
-
+use core::types::BenchMode;
 use hash::Hash;
-use hyper::Request;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
-use json::LazyValue;
 use keypair::Keypair;
 use program::{instruction::Instruction, utils::derive_pda};
 use pubkey::Pubkey;
@@ -16,104 +12,120 @@ use sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
 use signer::Signer;
 use transaction::Transaction;
 
-use crate::{http::Connection, payload::airdrop};
-
+/// # Transaction Provider Trait
+///
+/// A trait for generating Solana transactions for different benchmark modes.
 pub trait TransactionProvider {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction;
+    /// Returns the name of the benchmark mode.
+    fn name(&self) -> &'static str;
+    /// Generates the instruction for the transaction.
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction;
 
-    fn wrapix(&self, ix: Instruction, accounts: Vec<AccountMeta>) -> SolanaInstruction {
+    /// Wraps a given instruction in a `SolanaInstruction`.
+    fn wrap_ix(&self, ix: Instruction, accounts: Vec<AccountMeta>) -> SolanaInstruction {
         SolanaInstruction::new_with_bincode(program::ID, &ix, accounts)
     }
 
+    /// Generates a complete, signed transaction.
     fn generate(&mut self, id: u64, blockhash: Hash, signer: &Keypair) -> Transaction {
-        let ix = self.generateix(id);
+        let ix = self.generate_ix(id);
         let mut tx = Transaction::new_with_payer(&[ix], Some(&signer.pubkey()));
         tx.sign(&[signer], blockhash);
-
         tx
     }
 
+    /// Returns a list of accounts used by the transaction provider.
     fn accounts(&self) -> Vec<Pubkey>;
-
-    fn bookkeep(&mut self, _chain: &mut Connection, _iteration: u64) {}
 }
 
-pub struct SimpleTransaction {
-    pdas: Vec<Pubkey>,
+/// # SimpleByteSet Provider
+///
+/// Generates simple transactions that write a small set of bytes to an account.
+pub struct SimpleByteSetProvider {
+    accounts: Vec<Pubkey>,
 }
 
-pub struct ExpensiveTransaction {
-    pdas: Vec<Pubkey>,
+/// # HighCuCost Provider
+///
+/// Generates transactions with a high computational cost.
+pub struct HighCuCostProvider {
+    accounts: Vec<Pubkey>,
     iters: u32,
 }
 
-pub struct TriggerCloneTransaction {
+/// # TriggerClones Provider
+///
+/// Generates transactions that trigger account cloning.
+pub struct TriggerClonesProvider {
     ro_accounts: Vec<Pubkey>,
-    last_chain_update: Instant,
-    frequency: Duration,
     pda: Pubkey,
 }
 
-pub struct ReadWriteAccountsTransaction {
+/// # ReadWrite Provider
+///
+/// Generates transactions that perform read and write operations across multiple accounts.
+pub struct ReadWriteProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
 }
 
-pub struct ReadOnlyTransaction {
+/// # ReadOnly Provider
+///
+/// Generates read-only transactions to test for parallel processing performance.
+pub struct ReadOnlyProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
     count: usize,
 }
 
-pub struct CommitTransaction {
+/// # Commit Provider
+///
+/// Generates transactions that commit the state to the base chain.
+pub struct CommitProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
     count: usize,
     payer: Pubkey,
 }
 
-pub struct MixedTransactionProviders {
+/// # Mixed Provider
+///
+/// A transaction provider that combines multiple transaction providers to generate a mixed workload.
+pub struct MixedProvider {
     providers: Vec<Box<dyn TransactionProvider>>,
     rng: ThreadRng,
     distribution: WeightedIndex<u8>,
+    last_name: &'static str,
 }
 
-impl TransactionProvider for SimpleTransaction {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+impl TransactionProvider for SimpleByteSetProvider {
+    fn name(&self) -> &'static str {
+        "SimpleByteSet"
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::SimpleByteSet { id };
-        let pda = self.pdas[id as usize % self.pdas.len()];
+        let pda = self.accounts[id as usize % self.accounts.len()];
         let accounts = vec![AccountMeta::new(pda, false)];
-        self.wrapix(ix, accounts)
+        self.wrap_ix(ix, accounts)
     }
     fn accounts(&self) -> Vec<Pubkey> {
-        self.pdas.clone()
+        self.accounts.clone()
     }
 }
 
-impl TransactionProvider for ExpensiveTransaction {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
-        let init = self.pdas[id as usize % self.pdas.len()];
+impl TransactionProvider for HighCuCostProvider {
+    fn name(&self) -> &'static str {
+        "HighCuCost"
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+        let init = self.accounts[id as usize % self.accounts.len()];
         let ix = Instruction::ExpensiveHashCompute {
             id,
             init,
             iters: self.iters,
         };
         let accounts = vec![AccountMeta::new(init, false)];
-        self.wrapix(ix, accounts)
-    }
-
-    fn accounts(&self) -> Vec<Pubkey> {
-        self.pdas.clone()
-    }
-}
-
-impl TransactionProvider for ReadWriteAccountsTransaction {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
-        let mut accounts = self.accounts.choose_multiple(&mut self.rng, 2).copied();
-        let ix = Instruction::AccountDataCopy { id };
-        let ro = AccountMeta::new_readonly(accounts.next().unwrap(), false);
-        let rw = AccountMeta::new(accounts.next().unwrap(), false);
-        self.wrapix(ix, vec![ro, rw])
+        self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
@@ -121,8 +133,28 @@ impl TransactionProvider for ReadWriteAccountsTransaction {
     }
 }
 
-impl TransactionProvider for TriggerCloneTransaction {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+impl TransactionProvider for ReadWriteProvider {
+    fn name(&self) -> &'static str {
+        "ReadWrite"
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+        let mut accounts = self.accounts.choose_multiple(&mut self.rng, 2).copied();
+        let ix = Instruction::AccountDataCopy { id };
+        let ro = AccountMeta::new_readonly(accounts.next().unwrap(), false);
+        let rw = AccountMeta::new(accounts.next().unwrap(), false);
+        self.wrap_ix(ix, vec![ro, rw])
+    }
+
+    fn accounts(&self) -> Vec<Pubkey> {
+        self.accounts.clone()
+    }
+}
+
+impl TransactionProvider for TriggerClonesProvider {
+    fn name(&self) -> &'static str {
+        "TriggerClones"
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::MultiAccountRead { id };
         let mut accounts = vec![AccountMeta::new(self.pda, false)];
         accounts.extend(
@@ -130,19 +162,7 @@ impl TransactionProvider for TriggerCloneTransaction {
                 .iter()
                 .map(|&a| AccountMeta::new_readonly(a, false)),
         );
-        self.wrapix(ix, accounts)
-    }
-
-    fn bookkeep(&mut self, chain: &mut Connection, iteration: u64) {
-        if self.last_chain_update.elapsed() < self.frequency {
-            return;
-        }
-        self.last_chain_update = Instant::now();
-        let account = self.ro_accounts[iteration as usize % self.ro_accounts.len()];
-
-        let request = Request::new(airdrop(account, iteration));
-        let response = chain.send(request, |_: LazyValue| None::<()>);
-        tokio::task::spawn_local(response.resolve());
+        self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
@@ -152,8 +172,11 @@ impl TransactionProvider for TriggerCloneTransaction {
     }
 }
 
-impl TransactionProvider for ReadOnlyTransaction {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+impl TransactionProvider for ReadOnlyProvider {
+    fn name(&self) -> &'static str {
+        "ReadOnly"
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let accounts = self
             .accounts
             .choose_multiple(&mut self.rng, self.count)
@@ -162,7 +185,7 @@ impl TransactionProvider for ReadOnlyTransaction {
         let accounts = accounts
             .map(|acc| AccountMeta::new_readonly(acc, false))
             .collect();
-        self.wrapix(ix, accounts)
+        self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
@@ -170,8 +193,11 @@ impl TransactionProvider for ReadOnlyTransaction {
     }
 }
 
-impl TransactionProvider for CommitTransaction {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+impl TransactionProvider for CommitProvider {
+    fn name(&self) -> &'static str {
+        "Commit"
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::CommitAccounts { id };
         let mut accounts = vec![
             AccountMeta::new(self.payer, true),
@@ -184,7 +210,7 @@ impl TransactionProvider for CommitTransaction {
                 .copied()
                 .map(|acc| AccountMeta::new_readonly(acc, false)),
         );
-        self.wrapix(ix, accounts)
+        self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
@@ -192,107 +218,79 @@ impl TransactionProvider for CommitTransaction {
     }
 }
 
-impl TransactionProvider for MixedTransactionProviders {
-    fn generateix(&mut self, id: u64) -> SolanaInstruction {
+impl TransactionProvider for MixedProvider {
+    fn name(&self) -> &'static str {
+        self.last_name
+    }
+    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let index = self.distribution.sample(&mut self.rng);
         let generator = &mut self.providers[index];
-        generator.generateix(id)
+        self.last_name = generator.name();
+        generator.generate_ix(id)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        self.providers.iter().flat_map(|tp| tp.accounts()).collect()
-    }
-
-    fn bookkeep(&mut self, chain: &mut Connection, iteration: u64) {
-        for tp in self.providers.iter_mut() {
-            tp.bookkeep(chain, iteration);
-        }
+        self.providers
+            .first()
+            .map(|tp| tp.accounts())
+            .unwrap_or_default()
     }
 }
 
+/// # Make Provider
+///
+/// A factory function that creates a transaction provider based on the provided benchmark mode.
 pub fn make_provider(
-    mode: &TpsBenchMode,
+    mode: &BenchMode,
     base: Pubkey,
     space: u32,
+    accounts: Vec<Pubkey>,
 ) -> Box<dyn TransactionProvider> {
     match mode {
-        TpsBenchMode::Mixed(modes) => {
+        BenchMode::Mixed(modes) => {
             let providers = modes
                 .iter()
-                .map(|m| make_provider(&m.mode, base, space))
+                .map(|m| make_provider(&m.mode, base, space, accounts.clone()))
                 .collect::<Vec<_>>();
             let weights = modes.iter().map(|m| m.weight).collect::<Vec<_>>();
             let distribution = WeightedIndex::new(weights).unwrap();
             let rng = thread_rng();
-            Box::new(MixedTransactionProviders {
+            Box::new(MixedProvider {
                 providers,
                 distribution,
                 rng,
+                last_name: "Mixed",
             })
         }
-        TpsBenchMode::SimpleByteSet { accounts_count } => Box::new(SimpleTransaction {
-            pdas: (1..=*accounts_count)
-                .map(|i| derive_pda(base, space, i).0)
-                .collect(),
+        BenchMode::SimpleByteSet => Box::new(SimpleByteSetProvider { accounts }),
+        BenchMode::TriggerClones { .. } => Box::new(TriggerClonesProvider {
+            pda: derive_pda(base, space, 1).0,
+            ro_accounts: accounts,
         }),
-        TpsBenchMode::TriggerClones {
-            clone_frequency_secs,
-            accounts_count,
-        } => {
-            let ro_accounts = (1..=*accounts_count)
-                .map(|seed| derive_pda(base, space, seed).0)
-                .collect();
-            Box::new(TriggerCloneTransaction {
-                pda: derive_pda(base, space, 1).0,
-                ro_accounts,
-                frequency: Duration::from_secs(*clone_frequency_secs),
-                last_chain_update: Instant::now(),
-            })
-        }
-        TpsBenchMode::ReadWrite { accounts_count } => {
-            let accounts = (1..=*accounts_count)
-                .map(|seed| derive_pda(base, space, seed).0)
-                .collect();
-            Box::new(ReadWriteAccountsTransaction {
-                accounts,
-                rng: thread_rng(),
-            })
-        }
-        TpsBenchMode::HighCuCost {
-            accounts_count,
-            iters,
-        } => Box::new(ExpensiveTransaction {
-            pdas: (1..=*accounts_count)
-                .map(|i| derive_pda(base, space, i).0)
-                .collect(),
+        BenchMode::ReadWrite => Box::new(ReadWriteProvider {
+            accounts,
+            rng: thread_rng(),
+        }),
+        BenchMode::HighCuCost { iters } => Box::new(HighCuCostProvider {
+            accounts,
             iters: *iters,
         }),
-        TpsBenchMode::ReadOnly {
-            accounts_count,
+        BenchMode::ReadOnly {
             accounts_per_transaction,
-        } => {
-            let accounts = (1..=*accounts_count)
-                .map(|seed| derive_pda(base, space, seed).0)
-                .collect();
-            Box::new(ReadOnlyTransaction {
-                accounts,
-                count: *accounts_per_transaction as usize,
-                rng: thread_rng(),
-            })
-        }
-        TpsBenchMode::Commit {
-            accounts_count,
+        } => Box::new(ReadOnlyProvider {
+            accounts,
+            count: *accounts_per_transaction as usize,
+            rng: thread_rng(),
+        }),
+        BenchMode::Commit {
             accounts_per_transaction,
-        } => {
-            let accounts = (1..=*accounts_count)
-                .map(|seed| derive_pda(base, space, seed).0)
-                .collect();
-            Box::new(CommitTransaction {
-                accounts,
-                count: *accounts_per_transaction as usize,
-                rng: thread_rng(),
-                payer: base,
-            })
-        }
+        } => Box::new(CommitProvider {
+            accounts,
+            count: *accounts_per_transaction as usize,
+            rng: thread_rng(),
+            payer: base,
+        }),
+        // This function is only for transaction-based modes
+        _ => panic!("Unsupported mode for make_provider"),
     }
 }

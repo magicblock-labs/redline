@@ -1,171 +1,147 @@
+![redline-logo.png](logo.png)
+# REDLINE: A Solana Benchmarking Tool
 
-# REDLINE
+Welcome to **REDLINE**, a benchmarking tool for Solana validators. We built REDLINE to help us understand how our own validators perform under heavy loads. We're sharing it in the hope that it might be useful for other developers and validator operators as well.
 
-REDLINE is a powerful benchmarking tool designed for load testing MagicBlock
-validators. It enables developers and operators to simulate high-load scenarios
-and observe the performance of their validator nodes. With its flexible
-configuration options and multiple modes of operation, REDLINE is an essential
-tool for anyone looking to optimize the performance of their Solana
-infrastructure.
+With REDLINE, you can simulate high-load scenarios, identify performance bottlenecks, and get a better sense of how your Solana infrastructure holds up. It offers flexible configuration options and a variety of benchmark modes to help you test your validator's performance.
+
+-----
 
 ## Features
 
-- **Multi-threaded Execution**: REDLINE is capable of running multiple
-  benchmarks concurrently, using different keypairs, which are used to derive
-  many different PDA accounts to be used in benchmark transactions, this
-  simulates real-world load on the validator.
-  
-- **Configurable Transaction Per Second (TPS)**: Users can specify the desired
-  TPS to target during the benchmark, allowing them to simulate different load
-  levels and understand how the validator performs under pressure.
+Here are some of the things you can do with REDLINE:
 
-- **Configurable Requests Per Second (TPS)**: Users can specify the desired RPS
-  to target during the benchmark, this allows for mixing in read requests like
-  `getAccountInfo` and others to the raw transaction benchmarking.
+  * **Unified Benchmark Runner**: Run both TPS and RPS benchmarks, and even mix them together in the same run.
+  * **Multi-threaded Execution**: Simulate real-world, high-load conditions by running multiple benchmark instances in parallel.
+  * **Per-Request Statistics**: Get detailed stats on the performance of each benchmark mode.
+  * **Flexible Benchmark Modes**: Test different aspects of your validator's performance with a variety of built-in benchmark modes.
+  * **Customizable Configuration**: Use a simple TOML file to configure every aspect of the benchmark.
+  * **Comprehensive Reporting**: Generate detailed, human-readable reports from your benchmark results.
+  * **Minimal Resource Footprint**: REDLINE is designed to run locally alongside your validator without skewing the results.
+  * **Accurate Measurements**: REDLINE is designed to provide accurate measurements of latencies and throughput.
 
-- **Customizable Connection Settings**: Supports both HTTP1 and HTTP2, with
-  configurable maximum connections for both HTTP and WebSocket protocols.
-  REDLINE has a very tight low level control over network IO to ensure accurate
-  measurements.
-
-- **Flexible Benchmark Modes**: REDLINE supports a range of benchmark modes to
-  target specific performance areas:
-  - **Simple Byte Set**: Tests basic transaction throughput.
-  - **Trigger Clones**: Simulates the overhead of handling multiple read-only
-    accounts, which are regularly updated on main chain, thus forcing them to
-    be recloned.
-  - **High Compute Cost**: Stresses the validator with transactions that
-    require significant compute resources.
-  - **Read and Write Across Accounts**: Evaluates the performance of
-    simultaneous read and write operations, with multiple transactions using
-    intersecting set of accounts, thus creating lock contention.
-  - **Mixed Mode**: Combines multiple transaction types to simulate complex
-    workloads, allowing to specify the ratio of transactions from different
-    modes
-  - **Read Only**: Accounts in the transaction are used as read only and thus
-    can be used to test multiple such transactions running in parallel without
-    locking on the same accounts
-  - **Commit**: Generates commit transactions in the ER (to commit the state to
-    the base chain), can be mixed in with other modes which modify those
-    accounts
-  - **getX** requests: Various account related JSON-RPC requests can be used in
-    addition (or as a standalone benchmark) to the transaction load testing.
-
-- **Detailed Latency Tracking**: REDLINE provides granular insights into
-  transaction and event confirmation latencies, helping to identify
-  bottlenecks.
-
-- **Comprehensive Statistics**: After each benchmark, REDLINE generates
-  detailed statistics including latency distributions, TPS achieved, and more.
+-----
 
 ## Getting Started
 
-To start using REDLINE, clone the repository to your local environment.
-Configuration is managed through a TOML file, which allows you to specify
-connection settings, benchmarking parameters, and more.
+Here’s how to get up and running with REDLINE:
 
-Once configured, simply run the REDLINE executable with your configuration file
-to begin the benchmark. REDLINE will handle the rest, providing detailed
-outputs and statistics upon completion.
+### 1\. Clone the Repository
 
-## Usage
-REDLINE has two binaries:
-1. Main `redline` command to run benchmarks and generate statistics
-2. Utility `redline-assist` command to perform some utility functions before or after benchmark
+```bash
+git clone https://github.com/magicblock-labs/redline.git
+cd redline
+```
 
-Although you can use them directly, it's more convenient to employ a helper
-make file to orchestrate the interaction with those binaries.
+### 2\. Build the Binaries
 
-### Build the binaries
 ```bash
 make build
 ```
-this will build both binaries in release mode
 
-### Prepare the benchmark
-It's recommended (especially after changing benchmark modes) to run the
-preparation script before benchmark, to ensure that all the necessary solana
-accounts are created and delegated 
-```bash
-make prepare <CONFIG=path-to-config>
-```
-this will check that all the accounts to be used in the benchmark are in proper state. `CONFIG` environment variable is optional, `config.toml` will be used if not provided. 
+This will build both the `redline` and `redline-assist` binaries in release mode.
 
-### Run the benchmark
-```bash
-make bench <CONFIG=path-to-config>
-```
-this will run the benchmark with configured parameters. `CONFIG` environment
-variable is optional, `config.toml` will be used if not provided. 
+### 3\. Prepare the Benchmark
 
-### Print the benchmark report
-```bash
-make report <OUTPUT=path-to-json-output-file>
-```
-this will print out detailed statistics of the benchmarking. `OUTPUT`
-environment variable is optional, if not provided, the last benchmark result
-will be printed
+Before running a benchmark, you'll need to create and fund the necessary accounts.
 
-### Run the benchmark and print the report
 ```bash
-make bench-report
+make prepare CONFIG=config.example.toml
 ```
 
-### Compare benchmark results
-```bash
-make compare <SENSITIVITY=NUM> <THIS=path-to-json-output-file1> <THAT=path-to-json-output-file2>
-```
-print the comparison table between two bench runs, SENSITIVITY is number between 0 and 100 (default is 15), which is used to highlight performance anomalies which exceed this threshold (percentage-wise), THIS and THAT environment variables are optional, and if not provided the last two bench runs will be used.
+This will get all the accounts ready for the benchmark.
 
-### Run the benchmark, compare with the previous run, and delete the generated result
-```bash
-make bench-compare
-```
-this can be useful to repeatedly run the benchmark after tweaks, and comparing the results with fixed previous bench run
+### 4\. Run the Benchmark
 
-### Cleanup
+Now you're ready to run the benchmark.
+
 ```bash
-make clenaup # removes the last benchmark result
-make clean-all # removes results of all previous benchmarks
+make bench CONFIG=config.example.toml
 ```
 
+This will start the benchmark with the parameters specified in your configuration file.
+
+-----
+
+## Usage
+
+REDLINE includes two binaries: `redline` for running the benchmark and `redline-assist` for some helpful utilities.
+
+| Command | Description |
+| --- | --- |
+| `make build` | Builds the `redline` and `redline-assist` binaries. |
+| `make prepare` | Prepares the environment for a benchmark run. |
+| `make bench` | Runs the benchmark with the specified configuration. |
+| `make report` | Generates a detailed report from the latest benchmark results. |
+| `make bench-report` | Runs the benchmark and then generates a report. |
+| `make compare` | Compares the results of the two most recent benchmark runs. |
+| `make bench-compare`| Runs the benchmark and then compares the results with the previous run. |
+| `make clean` | Deletes the latest benchmark result file. |
+| `make clean-all` | Deletes all benchmark result files. |
+
+-----
 
 ## Configuration
 
-REDLINE uses a TOML configuration file to manage its settings. Here is an example configuration:
+REDLINE uses a TOML file for configuration. Here's an overview of the available options:
+
 ```toml
-parallelism = 4
+# The number of parallel threads to run the benchmark on.
+parallelism = 1
 
 [connection]
+# The URL of the main chain node.
 chain-url = "http://api.devnet.solana.com"
+# The URL of the ephemeral node.
 ephem-url = "http://127.0.0.1:8899"
-http-connection-type = "http1"
+# The type of HTTP connection to use.
+# Options: "http1" or { http2 = { streams = 128 } }
+http-connection-type = { http2 = { streams = 128 } }
+# The maximum number of HTTP connections.
+http-connections-count = 16
+# The maximum number of WebSocket connections.
+ws-connections-count = 16
 
-[rps-benchmark]
-enabled = true
-iterations = 15000
-rps = 100
-concurrency = 16
-mode = "get-account-info"
+[benchmark]
+# The total number of iterations.
+iterations = 100000
+# The target rate of requests or transactions per second.
+rate = 3000
+# The number of concurrent tasks.
+concurrency = 64
+# Whether to perform a preflight check for transactions.
+preflight-check = false
+# The number of accounts to use for the benchmark.
+accounts-count = 8
+# The benchmark mode to run.
+mode = { mixed = [
+    { mode = { high-cu-cost = { iters = 23 } }, weight = 50 },
+    { mode = { simple-byte-set = {} }, weight = 29 },
+    { mode = { read-write = {} }, weight = 20 },
+    { mode = { commit = { accounts-per-transaction = 2 } }, weight = 1 },
+] }
 
-[tps-benchmark]
-enabled = true
-iterations = 15000
-tps = 100
-concurrency = 16
-mode = { simple-byte-set = { accounts-count = 8 } }
-
-[subscription]
+[confirmations]
+# Whether to subscribe to account notifications.
 subscribe-to-accounts = true
+# Whether to subscribe to signature notifications.
 subscribe-to-signatures = true
-enforce-total-sync = false
+# Whether to use `getSignatureStatuses` for confirmations.
+get-signature-status = false
+# Whether to enforce total synchronization for confirmations.
+enforce-total-sync = true
 
 [data]
+# The encoding for account data.
+# Options: "base58", "base64", "base64+zstd"
 account-encoding = "base64+zstd"
+# The size of the accounts.
+# Options: "bytes128", "bytes512", "bytes2048", "bytes8192"
 account-size = "bytes128"
 ```
-See [`config.example.toml`](./config.example.toml) for detailed explanation of the various options
+
+-----
 
 ## Conclusion
 
-REDLINE is a robust, versatile tool for anyone involved in the MagicBlock ecosystem looking to test and improve their validator performance. Its range of features and modes of operation make it suitable for a wide variety of testing scenarios, providing various insights into validator performance profile.
+We hope REDLINE is a useful tool for you. If you have any questions or feedback, please feel free to open an issue or pull request on our GitHub repository.

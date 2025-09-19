@@ -2,6 +2,9 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use hash::{Hash, HASH_BYTES};
 use json::{JsonValueTrait, LazyValue};
 
+/// # Account Update Extractor
+///
+/// Extracts the account data from an account update notification and returns the first 8 bytes as a `u64`.
 pub fn account_update_extractor(value: LazyValue) -> Option<u64> {
     let value = value.get("value")?;
 
@@ -22,6 +25,9 @@ pub fn account_update_extractor(value: LazyValue) -> Option<u64> {
     Some(u64::from_le_bytes(number))
 }
 
+/// # Value Extractor
+///
+/// A generic extractor that checks for the presence of a "value" field in the response.
 pub fn value_extractor(value: LazyValue) -> Option<bool> {
     let v = value.get("value").map(|_| true);
     if !v.unwrap_or_default() {
@@ -30,22 +36,32 @@ pub fn value_extractor(value: LazyValue) -> Option<bool> {
     v
 }
 
-// TODO: use in getSignatureStatuses implementation
+/// # Signature Status Extractor (HTTP)
+///
+/// Extracts the signature status from an HTTP-based RPC response.
 #[allow(unused)]
 pub fn signature_status_extractor_http(value: LazyValue) -> Option<bool> {
     Some(!value.is_null())
 }
 
+/// # Signature Response Extractor
+///
+/// Extracts the signature from a `sendTransaction` RPC response.
 pub fn signature_response_extractor(value: LazyValue) -> Option<bool> {
     Some(value.as_str().is_some())
 }
 
+/// # Signature Status Extractor (WebSocket)
+///
+/// Extracts the signature status from a WebSocket-based subscription notification.
 pub fn signature_status_extractor_ws(value: LazyValue) -> Option<bool> {
     let value = value.get("value")?;
-
     value.get("err").map(|e| e.is_null())
 }
 
+/// # Blockhash Extractor
+///
+/// Extracts the blockhash from a `getLatestBlockhash` RPC response.
 pub fn blockhash_extractor(value: LazyValue) -> Option<Hash> {
     let value = value.get("value")?;
 

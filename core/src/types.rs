@@ -6,67 +6,65 @@ use serde::{
     Deserialize, Deserializer, Serialize,
 };
 
+/// A type alias for a dynamic error, commonly used for benchmark results.
 pub type DynError = Box<dyn Error + 'static>;
+/// A type alias for a result that can return a dynamic error, used for benchmark outcomes.
 pub type BenchResult<T> = Result<T, DynError>;
 
+/// Defines the modes for benchmarking, covering both TPS and RPS scenarios.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub enum TpsBenchMode {
+pub enum BenchMode {
+    /// **(TPS)** Writes a small set of bytes to a specified number of accounts.
+    SimpleByteSet,
+    /// **(TPS)** Triggers account cloning by periodically airdropping tokens to read-only accounts.
     #[serde(rename_all = "kebab-case")]
-    SimpleByteSet {
-        accounts_count: u8,
-    },
+    TriggerClones { clone_frequency_secs: u64 },
+    /// **(TPS)** Executes transactions with high computational cost to stress the validator's processing capacity.
+    HighCuCost { iters: u32 },
+    /// **(TPS)** Performs read and write operations across a set of accounts to test for lock contention.
+    ReadWrite,
+    /// **(TPS)** Executes read-only transactions to measure parallel processing performance.
     #[serde(rename_all = "kebab-case")]
-    TriggerClones {
-        clone_frequency_secs: u64,
-        accounts_count: u8,
-    },
+    ReadOnly { accounts_per_transaction: u8 },
+    /// **(TPS)** Sends commit transactions to the Ephemeral Rollup (ER) to test state-committing performance.
     #[serde(rename_all = "kebab-case")]
-    HighCuCost {
-        accounts_count: u8,
-        iters: u32,
-    },
-    #[serde(rename_all = "kebab-case")]
-    ReadWrite {
-        accounts_count: u8,
-    },
-    #[serde(rename_all = "kebab-case")]
-    ReadOnly {
-        accounts_count: u8,
-        accounts_per_transaction: u8,
-    },
-    #[serde(rename_all = "kebab-case")]
-    Commit {
-        accounts_count: u8,
-        accounts_per_transaction: u8,
-    },
-    Mixed(Vec<WeightedTpsBenchMode>),
+    Commit { accounts_per_transaction: u8 },
+
+    /// **(RPS)** Fetches account information for a single account.
+    GetAccountInfo,
+    /// **(RPS)** Fetches account information for multiple accounts in a single request.
+    GetMultipleAccounts,
+    /// **(RPS)** Fetches the balance of a single account.
+    GetBalance,
+    /// **(RPS)** Fetches the token balance of a single token account.
+    GetTokenAccountBalance,
+
+    /// A mixed mode that combines multiple benchmark modes with specified weights.
+    Mixed(Vec<WeightedBenchMode>),
 }
 
+/// Represents a benchmark mode with an assigned weight for mixed-mode benchmarks.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub struct WeightedTpsBenchMode {
-    pub mode: TpsBenchMode,
+pub struct WeightedBenchMode {
+    /// The benchmark mode to be executed.
+    pub mode: BenchMode,
+    /// The weight assigned to this mode, determining its frequency in the benchmark.
     pub weight: u8,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
-#[serde(rename_all = "kebab-case")]
-pub enum RpsBenchMode {
-    GetAccountInfo,
-    GetMultipleAccounts,
-    GetBalance,
-    GetTokenAccountBalance,
-    Mixed(Vec<Self>),
-}
-
+/// Defines the type of HTTP connection to use for the benchmark.
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum ConnectionType {
+    /// Use HTTP/1.1 for all connections.
     Http1,
+    /// Use HTTP/2 with a specified number of streams.
     Http2 { streams: u32 },
 }
 
+/// Defines the size of accounts to be used in the benchmark.
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 #[repr(u32)]
@@ -77,6 +75,7 @@ pub enum AccountSize {
     BYTES8192 = 8192,
 }
 
+/// Defines the encoding for account data in RPC requests.
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum AccountEncoding {
@@ -87,6 +86,7 @@ pub enum AccountEncoding {
 }
 
 impl AccountEncoding {
+    /// Returns the string representation of the account encoding.
     pub fn as_str(&self) -> &str {
         match self {
             AccountEncoding::Base58 => "base58",
@@ -96,10 +96,16 @@ impl AccountEncoding {
     }
 }
 
+/// A wrapper around `hyper::Uri` to provide custom methods for URL manipulation.
 #[derive(Clone)]
 pub struct Url(pub hyper::Uri);
 
 impl Url {
+    /// Returns the full address string, including the host and port.
+    ///
+    /// # Arguments
+    ///
+    /// * `ws` - A boolean indicating whether to use the WebSocket port (port + 1).
     pub fn address(&self, ws: bool) -> String {
         let host = self.host();
         let port = self.0.port_u16().map(|p| p + ws as u16).unwrap_or(80);
@@ -107,6 +113,7 @@ impl Url {
         format!("{}:{}", host, port)
     }
 
+    /// Returns the host part of the URL.
     pub fn host(&self) -> &str {
         self.0.host().expect("uri has no host")
     }

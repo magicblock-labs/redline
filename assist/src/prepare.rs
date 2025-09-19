@@ -1,10 +1,6 @@
-use core::{
-    config::Config,
-    consts::KEYPAIRS_PATH,
-    types::{BenchResult, TpsBenchMode},
-};
+use core::{config::Config, consts::KEYPAIRS_PATH, types::BenchResult};
 use std::{
-    cell::Cell, collections::HashSet, fs, hash::Hash, path::PathBuf, rc::Rc, time::Duration,
+    cell::RefCell, collections::HashSet, fs, hash::Hash, ops::AddAssign, path::PathBuf, rc::Rc,
 };
 
 use commitment::CommitmentConfig;
@@ -22,7 +18,27 @@ use transaction::Transaction;
 
 const LAMPORTS_PER_BENCH: u64 = 500_000_000;
 const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
+const FIVE_SOL: u64 = 1_000_000_000 * 5;
 
+/// # Prepare Command
+///
+/// The main entry point for the `prepare` command, responsible for orchestrating the
+/// entire preparation process.
+pub async fn prepare(path: PathBuf) -> BenchResult<()> {
+    tracing::info!("using config file at {path:?} to prepare the benchmark");
+    let config = Config::from_path(path)?;
+    let preparator = Preparator::new(&config).await?;
+
+    preparator.generate_keypairs()?;
+    preparator.fund_accounts().await?;
+    preparator.initialize_pdas().await?;
+
+    Ok(())
+}
+
+/// # Preparator
+///
+/// A struct that encapsulates the state and logic for preparing the benchmark environment.
 struct Preparator {
     config: Config,
     vault: Keypair,
@@ -30,45 +46,47 @@ struct Preparator {
     keypairs: Vec<Keypair>,
 }
 
-pub async fn prepare(path: PathBuf) -> BenchResult<()> {
-    tracing::info!("using config file at {path:?} to prepare the benchmark");
-    let config = Config::from_path(path)?;
-    Preparator::generate(&config)?;
-    let keypairs: Vec<_> = (1..=config.parallelism)
-        .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n}.json")))
-        .collect::<BenchResult<_>>()
-        .inspect_err(|e| tracing::error!("failed to read keypairs for bench: {e}"))?;
-    let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))
-        .inspect_err(|e| tracing::error!("failed to read keypair for vault: {e}"))?;
-    let client =
-        RpcClient::new_with_commitment(config.connection.chain_url.0.to_string(), CONFIRMED);
-
-    let pk = &vault.pubkey();
-    let lamports = client.get_balance(pk).await?;
-    const FIVE_SOL: u64 = 1_000_000_000 * 5;
-    if lamports < FIVE_SOL {
-        tracing::info!("Air dropping SOLs to vault",);
-        client.request_airdrop(pk, FIVE_SOL).await?;
-    }
-    let preparator = Preparator {
-        config,
-        vault,
-        client: client.into(),
-        keypairs,
-    };
-    preparator.fund().await?;
-    preparator.init().await?;
-
-    Ok(())
-}
-
 impl Preparator {
-    fn generate(config: &Config) -> BenchResult<()> {
+    /// # New Preparator
+    ///
+    /// Creates a new `Preparator` instance, loading the necessary keypairs and establishing
+    /// a connection to the Solana cluster.
+    async fn new(config: &Config) -> BenchResult<Self> {
+        let keypairs: Vec<_> = (1..=config.parallelism)
+            .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n}.json")))
+            .collect::<BenchResult<_>>()
+            .inspect_err(|e| tracing::error!("failed to read keypairs for bench: {e}"))?;
+        let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))
+            .inspect_err(|e| tracing::error!("failed to read keypair for vault: {e}"))?;
+        let client = Rc::new(RpcClient::new_with_commitment(
+            config.connection.chain_url.0.to_string(),
+            CONFIRMED,
+        ));
+
+        let pk = &vault.pubkey();
+        let lamports = client.get_balance(pk).await?;
+        if lamports < FIVE_SOL {
+            tracing::info!("Airdropping SOLs to vault");
+            client.request_airdrop(pk, FIVE_SOL).await?;
+        }
+
+        Ok(Self {
+            config: config.clone(),
+            vault,
+            client,
+            keypairs,
+        })
+    }
+
+    /// # Generate Keypairs
+    ///
+    /// Generates the necessary keypairs for the benchmark if they do not already exist.
+    fn generate_keypairs(&self) -> BenchResult<()> {
         if !fs::exists(KEYPAIRS_PATH)? {
             tracing::info!("Generating benchmark keypairs");
             fs::create_dir(KEYPAIRS_PATH)?;
-        };
-        for n in 1..=config.parallelism {
+        }
+        for n in 1..=self.config.parallelism {
             let path = format!("{KEYPAIRS_PATH}/{n}.json");
             if fs::exists(&path)? {
                 continue;
@@ -79,19 +97,21 @@ impl Preparator {
         if !fs::exists(&vault)? {
             Keypair::new().write_to_file(vault)?;
         }
-
         Ok(())
     }
 
-    async fn fund(&self) -> BenchResult<()> {
-        let count = self.keypairs.len();
+    /// # Fund Accounts
+    ///
+    /// Ensures that all keypairs have sufficient funds for the benchmark.
+    async fn fund_accounts(&self) -> BenchResult<()> {
         for (i, kp) in self.keypairs.iter().enumerate() {
             let pk = &kp.pubkey();
             let lamports = self.client.get_balance(pk).await?;
             if lamports < LAMPORTS_PER_BENCH {
                 tracing::info!(
-                    "{:>03}/{count:>03} Funding keypair for benchmark: {pk}",
-                    i + 1
+                    "{:>03}/{:>03} Funding keypair for benchmark: {pk}",
+                    i + 1,
+                    self.keypairs.len()
                 );
                 self.transfer(pk, LAMPORTS_PER_BENCH - lamports).await?;
             }
@@ -99,80 +119,35 @@ impl Preparator {
         Ok(())
     }
 
-    async fn init(&self) -> BenchResult<()> {
-        let space = self.config.data.account_size as u32;
-        let tps_accounts = if self.config.tps_benchmark.enabled {
-            self.extract_accounts_tps(&self.config.tps_benchmark.mode)
-        } else {
-            vec![]
-        };
-        let rps_accounts = if self.config.rps_benchmark.enabled {
-            self.extract_accounts_rps(self.config.rps_benchmark.accounts_count)
-        } else {
-            vec![]
-        };
-        let accounts = tps_accounts
-            .into_iter()
-            .chain(rps_accounts.into_iter())
-            .collect::<HashSet<_>>();
+    /// # Initialize PDAs
+    ///
+    /// Creates and delegates all the necessary Program Derived Addresses (PDAs) for the benchmark.
+    async fn initialize_pdas(&self) -> BenchResult<()> {
+        let accounts = self.extract_accounts();
         let count = accounts.len();
         let local = LocalSet::new();
-        let counter = Rc::new(Cell::new(0));
+
+        let counter = Rc::new(RefCell::new(0u32));
         for pda in accounts {
             let client = self.client.clone();
             let counter = counter.clone();
             let fut = async move {
                 let response = client
-                    .get_account_with_commitment(&pda.pubkey, Default::default())
-                    .await?;
-                let mut attempt = 0;
-                match response.value {
-                    Some(acc) if acc.owner == DELEGATION_PROGRAM_ID => {}
-                    None => loop {
-                        attempt += 1;
-                        tokio::time::sleep(Duration::from_millis(
-                            counter.get() as u64 * 50 * attempt,
-                        ))
-                        .await;
-                        let hash = client.get_latest_blockhash().await?;
-                        let ix = Instruction::InitAccount {
-                            space,
-                            seed: pda.seed,
-                            bump: pda.bump,
-                        };
-                        let payer = pda.payer.pubkey();
-                        let metas = vec![
-                            AccountMeta::new(payer, true),
-                            AccountMeta::new(pda.pubkey, false),
-                            AccountMeta::new_readonly(Pubkey::default(), false),
-                        ];
-                        let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
-                        let txn = Transaction::new_signed_with_payer(
-                            &[ix],
-                            Some(&payer),
-                            &[&pda.payer],
-                            hash,
-                        );
-                        if let Err(error) = client.send_and_confirm_transaction(&txn).await {
-                            tracing::error!(%error, "failed to send PDA init transaction");
-                            continue;
-                        }
-                        if let Err(error) = Self::delegate(&client, &pda).await {
-                            tracing::error!(%error, "failed to delegate the PDA");
-                            continue;
-                        }
-                        break;
-                    },
-                    Some(_) => {
-                        while let Err(error) = Self::delegate(&client, &pda).await {
-                            tracing::error!(%error, "failed to delegate the PDA");
-                            tokio::time::sleep(Duration::from_secs(attempt)).await;
-                        }
+                    .get_account_with_config(&pda.pubkey, Default::default())
+                    .await?
+                    .value;
+                if response.is_none() {
+                    Self::create_and_delegate_pda(&client, &pda).await?;
+                } else if let Some(acc) = response {
+                    if acc.owner != DELEGATION_PROGRAM_ID {
+                        Self::delegate_pda(&client, &pda).await?;
                     }
                 }
-                let c = counter.get() + 1;
-                counter.set(c);
-                tracing::info!("{c:>03}/{count:>03} PDA {} is ready", pda.pubkey);
+
+                counter.borrow_mut().add_assign(1);
+                let i = *counter.borrow();
+
+                tracing::info!("{i}/{} PDA {} is ready", count, pda.pubkey);
                 BenchResult::Ok(())
             };
             local.spawn_local(fut);
@@ -182,77 +157,76 @@ impl Preparator {
         Ok(())
     }
 
-    fn extract_accounts_tps(&self, mode: &TpsBenchMode) -> Vec<Pda> {
-        use TpsBenchMode::*;
-        let space = self.config.data.account_size as u32;
+    /// # Create and Delegate PDA
+    ///
+    /// A helper function to create and delegate a PDA.
+    async fn create_and_delegate_pda(client: &Rc<RpcClient>, pda: &Pda) -> BenchResult<()> {
+        let space = pda.space;
+        let seed = pda.seed;
+        let bump = pda.bump;
+        let payer = pda.payer.insecure_clone();
+        let pubkey = pda.pubkey;
 
-        let derive_accounts = |count: u8| -> Vec<Pda> {
-            self.keypairs
-                .iter()
-                .flat_map(|k| (1..=count).map(move |seed| (k, seed)))
-                .map(|(k, seed)| {
-                    let (pubkey, bump) = derive_pda(k.pubkey(), space, seed);
-                    Pda {
-                        payer: k.insecure_clone(),
-                        pubkey,
-                        seed,
-                        bump,
-                    }
-                })
-                .collect()
-        };
+        let hash = client.get_latest_blockhash().await?;
+        let ix = Instruction::InitAccount { space, seed, bump };
+        let metas = vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new(pubkey, false),
+            AccountMeta::new_readonly(Pubkey::default(), false),
+        ];
+        let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
+        let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], hash);
+        client.send_and_confirm_transaction(&txn).await?;
 
-        match mode {
-            SimpleByteSet { accounts_count }
-            | HighCuCost { accounts_count, .. }
-            | TriggerClones { accounts_count, .. }
-            | ReadWrite { accounts_count }
-            | ReadOnly { accounts_count, .. }
-            | Commit { accounts_count, .. } => derive_accounts(*accounts_count),
-            Mixed(modes) => {
-                let mut accounts: Vec<_> = modes
-                    .iter()
-                    .flat_map(|m| self.extract_accounts_tps(&m.mode))
-                    .collect();
-                accounts.dedup_by_key(|a| a.pubkey);
-                accounts
-            }
-        }
+        Self::delegate_pda(client, pda).await
     }
 
-    fn extract_accounts_rps(&self, count: u8) -> Vec<Pda> {
-        let space = self.config.data.account_size as u32;
-
-        self.keypairs
-            .iter()
-            .flat_map(|k| (0..count).map(move |seed| (k, seed)))
-            .map(|(k, seed)| {
-                let (pubkey, bump) = derive_pda(k.pubkey(), space, seed);
-                Pda {
-                    payer: k.insecure_clone(),
-                    pubkey,
-                    seed,
-                    bump,
-                }
-            })
-            .collect()
-    }
-
-    async fn delegate(client: &RpcClient, pda: &Pda) -> BenchResult<()> {
+    /// # Delegate PDA
+    ///
+    /// A helper function to delegate a PDA.
+    async fn delegate_pda(client: &Rc<RpcClient>, pda: &Pda) -> BenchResult<()> {
         let ix = Instruction::Delegate { seed: pda.seed };
         let payer = pda.payer.pubkey();
         let hash = client.get_latest_blockhash().await?;
-
         let accounts = DelegateAccounts::new(pda.pubkey, program::id());
         let metas = DelegateAccountMetas::from(accounts).into_vec(payer);
-
         let ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
         let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&pda.payer], hash);
-
         client.send_and_confirm_transaction(&txn).await?;
         Ok(())
     }
 
+    /// # Extract Accounts
+    ///
+    /// Extracts all the necessary PDAs for the benchmark from the configuration.
+    fn extract_accounts(&self) -> HashSet<Pda> {
+        let space = self.config.data.account_size as u32;
+        self.derive_pdas(self.config.benchmark.accounts_count, space)
+    }
+
+    /// # Derive PDAs
+    ///
+    /// Derives a set of PDAs for a given number of accounts.
+    fn derive_pdas(&self, count: u8, space: u32) -> HashSet<Pda> {
+        let mut accounts = HashSet::new();
+        for kp in &self.keypairs {
+            for seed in 1..=count {
+                let (pubkey, bump) = derive_pda(kp.pubkey(), space, seed);
+                accounts.insert(Pda {
+                    payer: kp.insecure_clone(),
+                    pubkey,
+                    seed,
+                    bump,
+                    space,
+                });
+            }
+        }
+        accounts
+    }
+
+    /// # Transfer Funds
+    ///
+    /// Transfers a specified amount of lamports to a given public key.
     async fn transfer(&self, to: &Pubkey, amount: u64) -> BenchResult<()> {
         let hash = self.client.get_latest_blockhash().await?;
         let txn = systransaction::transfer(&self.vault, to, amount, hash);
@@ -261,11 +235,15 @@ impl Preparator {
     }
 }
 
+/// # PDA
+///
+/// A struct to hold the information for a Program Derived Address.
 struct Pda {
     payer: Keypair,
     pubkey: Pubkey,
     seed: u8,
     bump: u8,
+    space: u32,
 }
 
 impl PartialEq for Pda {

@@ -5,11 +5,18 @@ use args::AssistCommand;
 use structopt::StructOpt;
 use tracing_subscriber::EnvFilter;
 
+/// # Main Entry Point
+///
+/// The main entry point for the `redline-assist` utility, responsible for parsing
+/// command-line arguments and dispatching to the appropriate handler.
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> BenchResult<()> {
+    // Initialize the logger
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
+
+    // Parse the command-line arguments and execute the corresponding command
     let cmd = AssistCommand::from_args();
     match cmd {
         AssistCommand::Prepare { config } => prepare::prepare(config).await?,
@@ -25,6 +32,14 @@ async fn main() -> BenchResult<()> {
     Ok(())
 }
 
+/// # Latest Run Output Path
+///
+/// A helper function to find the path to the latest benchmark result file.
+///
+/// ### Arguments
+///
+/// * `count` - The number of recent runs to skip. For example, `1` will return the
+///           most recent run, while `2` will return the second most recent.
 fn latest_run_output_path(mut count: usize) -> PathBuf {
     let dir = fs::read_dir(RUNS_OUTPUT_PATH)
         .inspect_err(

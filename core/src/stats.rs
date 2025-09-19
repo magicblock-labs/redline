@@ -1,166 +1,30 @@
 use json::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize)]
+/// # Benchmark Statistics
+///
+/// A unified structure for storing all benchmark statistics, with a clear distinction
+/// between transaction and RPC request metrics.
+#[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct TpsBenchStatistics {
+pub struct BenchStatistics {
+    /// The configuration used for the benchmark.
     pub configuration: json::Value,
-    pub send_txn_requests_latency: ObservationsStats,
-    pub account_update_latency: ObservationsStats,
+    /// A map of statistics for each transaction-based benchmark mode.
+    pub transaction_stats: HashMap<String, ObservationsStats>,
+    /// A map of statistics for each RPC-based benchmark mode.
+    pub rpc_request_stats: HashMap<String, ObservationsStats>,
+    /// Latency for receiving signature confirmations.
     pub signature_confirmation_latency: ObservationsStats,
-
-    pub transactions_per_second: ObservationsStats,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct RpsBenchStatistics {
-    pub configuration: json::Value,
-    pub latency: ObservationsStats,
-
-    pub requests_per_second: ObservationsStats,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct CombinedBenchStatistics {
-    pub configuration: json::Value,
-    pub get_request_latency: ObservationsStats,
-    pub requests_per_second: ObservationsStats,
-
-    pub send_txn_requests_latency: ObservationsStats,
+    /// Latency for receiving account updates.
     pub account_update_latency: ObservationsStats,
-    pub signature_confirmation_latency: ObservationsStats,
-
-    pub transactions_per_second: ObservationsStats,
+    /// Throughput statistics for the entire benchmark run.
+    pub rps: ObservationsStats,
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum BenchStatistics {
-    Tps(TpsBenchStatistics),
-    Rps(RpsBenchStatistics),
-    Combined(CombinedBenchStatistics),
-}
-
-impl BenchStatistics {
-    pub fn configuration(&self) -> &json::Value {
-        match self {
-            Self::Tps(s) => &s.configuration,
-            Self::Rps(s) => &s.configuration,
-            Self::Combined(s) => &s.configuration,
-        }
-    }
-
-    pub fn merge_rps_to_tps(self, stats: Option<RpsBenchStatistics>) -> Self {
-        let Some(stats) = stats else {
-            return self;
-        };
-        let Self::Tps(s) = self else {
-            return self;
-        };
-        let combined = CombinedBenchStatistics {
-            configuration: stats.configuration,
-            account_update_latency: s.account_update_latency,
-            transactions_per_second: s.transactions_per_second,
-            signature_confirmation_latency: s.signature_confirmation_latency,
-            requests_per_second: stats.requests_per_second,
-            send_txn_requests_latency: s.send_txn_requests_latency,
-            get_request_latency: stats.latency,
-        };
-        Self::Combined(combined)
-    }
-
-    pub fn account_update_latency(&self) -> Option<ObservationsStats> {
-        match self {
-            Self::Tps(s) => Some(s.account_update_latency),
-            Self::Combined(s) => Some(s.account_update_latency),
-            Self::Rps(_) => None,
-        }
-    }
-
-    pub fn send_txn_requests_latency(&self) -> Option<ObservationsStats> {
-        match self {
-            Self::Tps(s) => Some(s.send_txn_requests_latency),
-            Self::Combined(s) => Some(s.send_txn_requests_latency),
-            Self::Rps(_) => None,
-        }
-    }
-
-    pub fn signature_confirmation_latency(&self) -> Option<ObservationsStats> {
-        match self {
-            Self::Tps(s) => Some(s.signature_confirmation_latency),
-            Self::Combined(s) => Some(s.signature_confirmation_latency),
-            Self::Rps(_) => None,
-        }
-    }
-
-    pub fn transactions_per_second(&self) -> Option<ObservationsStats> {
-        match self {
-            Self::Tps(s) => Some(s.transactions_per_second),
-            Self::Combined(s) => Some(s.transactions_per_second),
-            Self::Rps(_) => None,
-        }
-    }
-
-    pub fn requests_per_second(&self) -> Option<ObservationsStats> {
-        match self {
-            Self::Tps(_) => None,
-            Self::Combined(s) => Some(s.requests_per_second),
-            Self::Rps(s) => Some(s.requests_per_second),
-        }
-    }
-
-    pub fn get_request_latency(&self) -> Option<ObservationsStats> {
-        match self {
-            Self::Tps(_) => None,
-            Self::Combined(s) => Some(s.get_request_latency),
-            Self::Rps(s) => Some(s.latency),
-        }
-    }
-}
-
-impl TpsBenchStatistics {
-    pub fn merge(mut stats: Vec<Self>) -> BenchStatistics {
-        let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
-
-        let send_txn_requests_latency =
-            ObservationsStats::merge(stats.iter().map(|s| s.send_txn_requests_latency).collect());
-        let account_update_latency =
-            ObservationsStats::merge(stats.iter().map(|s| s.account_update_latency).collect());
-        let signature_confirmation_latency = ObservationsStats::merge(
-            stats
-                .iter()
-                .map(|s| s.signature_confirmation_latency)
-                .collect(),
-        );
-        let transactions_per_second =
-            ObservationsStats::merge(stats.iter().map(|s| s.transactions_per_second).collect());
-
-        BenchStatistics::Tps(Self {
-            configuration,
-            send_txn_requests_latency,
-            account_update_latency,
-            signature_confirmation_latency,
-            transactions_per_second,
-        })
-    }
-}
-
-impl RpsBenchStatistics {
-    pub fn merge(mut stats: Vec<Self>) -> Self {
-        let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
-
-        let latency = ObservationsStats::merge(stats.iter().map(|s| s.latency).collect());
-        let requests_per_second =
-            ObservationsStats::merge(stats.iter().map(|s| s.requests_per_second).collect());
-
-        Self {
-            configuration,
-            latency,
-            requests_per_second,
-        }
-    }
-}
-
+/// # Observation Statistics
+///
+/// A detailed breakdown of a set of observations, including count, median, min, max, average, 95th percentile, and standard deviation.
 #[derive(Deserialize, Serialize, Clone, Copy, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ObservationsStats {
@@ -173,9 +37,68 @@ pub struct ObservationsStats {
     pub stddev: u32,
 }
 
+impl BenchStatistics {
+    /// # Merge Statistics
+    ///
+    /// Merges a vector of `BenchStatistics` into a single, consolidated report.
+    pub fn merge(mut stats: Vec<Self>) -> Self {
+        if stats.is_empty() {
+            return Self::default();
+        }
+        let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
+        let mut transaction_stats = HashMap::new();
+        let mut rpc_request_stats = HashMap::new();
+        let mut rps = Vec::new();
+        let mut account_update_stats = Vec::new();
+        let mut signature_confirmation_stats = Vec::new();
+
+        for s in stats {
+            for (key, value) in s.transaction_stats {
+                transaction_stats
+                    .entry(key)
+                    .or_insert_with(Vec::new)
+                    .push(value);
+            }
+            for (key, value) in s.rpc_request_stats {
+                rpc_request_stats
+                    .entry(key)
+                    .or_insert_with(Vec::new)
+                    .push(value);
+            }
+            account_update_stats.push(s.account_update_latency);
+            signature_confirmation_stats.push(s.signature_confirmation_latency);
+            rps.push(s.rps);
+        }
+
+        let transaction_stats = transaction_stats
+            .into_iter()
+            .map(|(key, value)| (key, ObservationsStats::merge(value)))
+            .collect();
+        let rpc_request_stats = rpc_request_stats
+            .into_iter()
+            .map(|(key, value)| (key, ObservationsStats::merge(value)))
+            .collect();
+
+        Self {
+            configuration,
+            transaction_stats,
+            account_update_latency: ObservationsStats::merge(account_update_stats),
+            signature_confirmation_latency: ObservationsStats::merge(signature_confirmation_stats),
+            rpc_request_stats,
+            rps: ObservationsStats::merge(rps),
+        }
+    }
+}
+
 impl ObservationsStats {
+    /// # Merge Observation Statistics
+    ///
+    /// Merges a vector of `ObservationsStats` into a single, consolidated report.
     pub fn merge(stats: Vec<ObservationsStats>) -> Self {
         let total_count = stats.len();
+        if total_count == 0 {
+            return Self::default();
+        }
         let sum = stats.iter().fold(
             (0usize, 0i32, u32::MAX, 0u32, 0i32, 0i32, 0u32),
             |acc, stat| {
@@ -201,9 +124,10 @@ impl ObservationsStats {
             stddev: sum.6 / total_count as u32,
         }
     }
-}
 
-impl ObservationsStats {
+    /// # New Observation Statistics
+    ///
+    /// Creates a new `ObservationsStats` instance from a vector of observations.
     pub fn new(mut observations: Vec<u32>, invertedq: bool) -> Self {
         if observations.is_empty() {
             return Self::default();
@@ -219,7 +143,7 @@ impl ObservationsStats {
         let qindex = if invertedq {
             count.saturating_sub(q95 + 1)
         } else {
-            q95 - 1
+            q95.saturating_sub(1)
         };
         let quantile95 = observations[qindex] as i32;
 
