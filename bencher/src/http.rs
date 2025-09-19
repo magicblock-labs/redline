@@ -17,21 +17,35 @@ use tokio::net::TcpStream;
 
 use crate::BenchResult;
 
+/// # Inner Connection
+///
+/// An enum that abstracts over the different types of HTTP connections (HTTP/1 and HTTP/2).
 pub enum InnerConnection {
     Http1(Http1Sender<String>),
     Http2(Http2Sender<String>),
 }
 
+/// # Connection
+///
+/// Represents a single HTTP connection to the target validator, capable of sending requests
+/// and managing the underlying connection state.
 pub struct Connection {
     inner: InnerConnection,
     uri: Uri,
 }
 
+/// # Connection Pool
+///
+/// Manages a pool of `Connection` instances to handle multiple concurrent HTTP requests,
+/// providing a simple interface for obtaining a connection and ensuring efficient reuse.
 pub struct ConnectionPool {
     connections: VecDeque<Connection>,
 }
 
 impl ConnectionPool {
+    /// # New Connection Pool
+    ///
+    /// Creates a new `ConnectionPool` with the specified number of connections.
     pub async fn new(config: &ConnectionSettings) -> BenchResult<Self> {
         let count = config.http_connections_count;
         let mut connections = VecDeque::with_capacity(count);
@@ -42,6 +56,10 @@ impl ConnectionPool {
         Ok(Self { connections })
     }
 
+    /// # Get Connection
+    ///
+    /// Obtains a `ConnectionGuard` from the pool, which provides exclusive access to a connection
+    /// and automatically returns it to the pool when dropped.
     pub async fn connection(&mut self) -> BenchResult<ConnectionGuard<'_>> {
         let mut i = 0;
         loop {
@@ -63,6 +81,10 @@ impl ConnectionPool {
 }
 
 impl Connection {
+    /// # Send Request
+    ///
+    /// Sends an HTTP request and returns a `ParsedResponse` that can be used to resolve
+    /// the response and extract the desired value.
     pub fn send<F>(&mut self, mut request: Request<String>, extractor: F) -> ParsedResponse<F> {
         *request.uri_mut() = self.uri.clone();
         *request.method_mut() = Method::POST;
@@ -80,6 +102,9 @@ impl Connection {
         }
     }
 
+    /// # Is Ready
+    ///
+    /// Checks if the connection is ready to send another request.
     fn is_ready(&self) -> bool {
         match &self.inner {
             InnerConnection::Http1(sender) => sender.is_ready(),
@@ -87,6 +112,9 @@ impl Connection {
         }
     }
 
+    /// # Ready
+    ///
+    /// Waits until the connection is ready to send another request.
     async fn ready(&mut self) -> BenchResult<()> {
         match &mut self.inner {
             InnerConnection::Http1(sender) => sender.ready().await,
@@ -97,6 +125,9 @@ impl Connection {
 }
 
 impl Connection {
+    /// # New Connection
+    ///
+    /// Establishes a new HTTP connection to the specified URL.
     pub async fn new(url: &Url, ty: ConnectionType) -> BenchResult<Self> {
         let stream = TcpStream::connect(url.address(false)).await?;
         stream.set_nodelay(true).expect("failed to set TCP nodelay");
@@ -125,6 +156,10 @@ impl Connection {
     }
 }
 
+/// # Connection Guard
+///
+/// A guard that provides exclusive access to a `Connection` and ensures that it is
+/// returned to the pool when dropped.
 pub struct ConnectionGuard<'a> {
     con: Option<Connection>,
     pool: &'a mut VecDeque<Connection>,
@@ -151,6 +186,10 @@ impl Drop for ConnectionGuard<'_> {
     }
 }
 
+/// # Parsed Response
+///
+/// A future that resolves to the parsed response of an HTTP request, with a generic
+/// extractor function `F` to extract the desired value `V`.
 pub struct ParsedResponse<F> {
     pending: Pin<Box<dyn Future<Output = hyper::Result<Response<Incoming>>> + Send>>,
     extractor: F,
@@ -160,6 +199,10 @@ impl<F, V> ParsedResponse<F>
 where
     F: FnOnce(LazyValue) -> Option<V>,
 {
+    /// # Resolve Response
+    ///
+    /// Asynchronously resolves the HTTP response and applies the extractor function
+    /// to parse the response body.
     pub async fn resolve(self) -> BenchResult<Option<V>> {
         enum Data {
             Empty,
@@ -187,11 +230,7 @@ where
         }
         let result = match &data {
             Data::Empty => return Ok(None),
-            Data::SingleChunk(chunk) => json::get(chunk, ["result"]).inspect_err(|_| {
-                tracing::warn!("failed to parse response: {}", unsafe {
-                    std::str::from_utf8_unchecked(chunk)
-                })
-            })?,
+            Data::SingleChunk(chunk) => json::get(chunk, ["result"])?,
             Data::MultiChunk(chunk) => json::get(chunk.as_slice(), ["result"])?,
         };
         Ok((self.extractor)(result))

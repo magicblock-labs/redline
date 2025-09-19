@@ -1,37 +1,53 @@
 use std::path::PathBuf;
-
 use structopt::StructOpt;
 
+/// # Redline Assist Command-Line Interface
+///
+/// Defines the command-line arguments for the `redline-assist` utility, which provides
+/// helper functions for preparing, reporting on, and cleaning up benchmark runs.
 #[derive(StructOpt, Debug)]
 #[structopt(name = "redline-assist", rename_all = "kebab-case")]
 pub enum AssistCommand {
-    /// Prepare accounts for given benchmark configuration, make sure that PDAs exist and delegated, and payers are funded
+    /// ## Prepare
+    ///
+    /// Prepares the environment for a benchmark run by creating and funding the necessary
+    /// accounts, and ensuring that all PDAs are properly delegated.
     Prepare {
-        /// Path containing the configuration for benchmark
+        /// The path to the benchmark configuration file.
         #[structopt(parse(from_os_str))]
         config: PathBuf,
     },
-    /// Generate comprehensive report for benchmark results
+    /// ## Report
+    ///
+    /// Generates a comprehensive report from a benchmark results file.
     Report {
-        /// Benchmark results, JSON file
+        /// The path to the JSON file containing the benchmark results.
         #[structopt(parse(from_os_str))]
         results: Option<PathBuf>,
     },
-    /// Compare results of two different benchmark runs, inputs are JSON file results
+    /// ## Compare
+    ///
+    /// Compares the results of two different benchmark runs, highlighting any significant
+    /// performance regressions or improvements.
     Compare {
-        /// Benchmark results, JSON file #1
+        /// The path to the first benchmark results file.
         #[structopt(parse(from_os_str))]
         this: Option<PathBuf>,
-        /// Benchmark results, JSON file #2
+        /// The path to the second benchmark results file.
         #[structopt(parse(from_os_str))]
         that: Option<PathBuf>,
+        /// A flag to suppress the output if no regression is detected.
         #[structopt(long)]
         silent: bool,
+        /// The sensitivity threshold for detecting performance regressions (0-100).
         #[structopt(long)]
         sensitivity: u8,
     },
-    /// Cleanup benchmark runs results (JSON files)
+    /// ## Cleanup
+    ///
+    /// Cleans up the benchmark runs directory, removing all results files.
     Cleanup {
+        /// A flag to remove all benchmark results, not just the latest one.
         #[structopt(long, short)]
         all: bool,
     },

@@ -7,11 +7,22 @@ use crate::{
     extractor::blockhash_extractor, http::Connection, payload, BenchResult, ShutDownListener,
 };
 
+/// # Blockhash Provider
+///
+/// A provider for fetching and caching the latest blockhash from the Solana RPC endpoint.
+/// It uses a background task to periodically refresh the blockhash, ensuring that it
+/// remains up-to-date.
+#[derive(Clone)]
 pub struct BlockHashProvider {
+    /// A reference-counted, interior-mutable cell holding the latest blockhash.
     hash: Rc<RefCell<Hash>>,
 }
 
 impl BlockHashProvider {
+    /// # New Blockhash Provider
+    ///
+    /// Creates a new `BlockHashProvider`, fetches the initial blockhash, and spawns a
+    /// background task to keep it refreshed.
     pub async fn new(mut ephem: Connection, shutdown: ShutDownListener) -> BenchResult<Self> {
         let hash = Self::request(&mut ephem).await?;
         let hash = Rc::new(RefCell::new(hash));
@@ -19,19 +30,30 @@ impl BlockHashProvider {
         Ok(Self { hash })
     }
 
+    /// # Get Blockhash
+    ///
+    /// Returns the latest cached blockhash.
     pub fn hash(&self) -> Hash {
         *self.hash.borrow()
     }
 
+    /// # Request Blockhash
+    ///
+    /// Sends a request to the RPC endpoint to fetch the latest blockhash.
     async fn request(ephem: &mut Connection) -> BenchResult<Hash> {
         let request = Request::new(payload::blockhash());
         ephem
             .send(request, blockhash_extractor)
             .resolve()
-            .await?
+            .await
+            .inspect_err(|err| tracing::error!(%err, "error fetching blockhash"))?
             .ok_or("blockhash was not found in response for getLatestBlockhash".into())
     }
 
+    /// # Blockhash Refresher
+    ///
+    /// A background task that periodically refreshes the blockhash, ensuring that it
+    /// remains up-to-date.
     async fn refresher(
         mut ephem: Connection,
         hash: Rc<RefCell<Hash>>,

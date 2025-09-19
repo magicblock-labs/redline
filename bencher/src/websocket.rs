@@ -1,3 +1,5 @@
+// bencher/src/websocket.rs
+
 use core::{config::ConnectionSettings, types::Url};
 use std::collections::HashMap;
 
@@ -17,6 +19,11 @@ use tokio::{
 
 use crate::{BenchResult, ShutDown, ShutDownListener};
 
+/// # WebSocket Worker
+///
+/// Manages a single WebSocket connection, handling subscriptions, message parsing,
+/// and graceful shutdown. It is generic over the extractor function `F` and the
+/// extracted value `V`.
 pub struct WsWorker<F, V> {
     ws: WebSocket<TokioIo<Upgraded>>,
     rx: ShutDownReceiver<Subscription<V>>,
@@ -26,6 +33,10 @@ pub struct WsWorker<F, V> {
     extractor: F,
 }
 
+/// # Subscription
+///
+/// Represents a subscription to a WebSocket feed, including the channel for sending
+/// back confirmations, the payload for the subscription request, and other metadata.
 pub struct Subscription<V> {
     pub tx: Sender<(u64, V)>,
     pub payload: String,
@@ -33,6 +44,10 @@ pub struct Subscription<V> {
     pub id: u64,
 }
 
+/// # WebSocket Pool
+///
+/// Manages a pool of `WsWorker` instances to handle multiple concurrent WebSocket connections,
+/// distributing the load and providing a simple interface for obtaining a connection.
 pub struct WebsocketPool<V> {
     connections: Vec<Sender<Subscription<V>>>,
     next: usize,
@@ -43,6 +58,9 @@ where
     F: Fn(LazyValue) -> Option<V> + Send + 'static,
     V: Send + 'static,
 {
+    /// # Initialize WebSocket Worker
+    ///
+    /// Establishes a WebSocket connection and spawns a new `WsWorker` to manage it.
     async fn init(
         url: &Url,
         extractor: F,
@@ -75,6 +93,10 @@ where
         Ok(tx)
     }
 
+    /// # Run WebSocket Worker
+    ///
+    /// The main loop for the `WsWorker`, handling incoming messages, subscriptions,
+    /// and shutdown signals.
     async fn run(mut self) {
         #[derive(Deserialize, Debug)]
         struct Confirmation {
@@ -140,6 +162,9 @@ where
 }
 
 impl<V> WebsocketPool<V> {
+    /// # New WebSocket Pool
+    ///
+    /// Creates a new `WebsocketPool` with the specified number of connections.
     pub async fn new<F>(
         config: &ConnectionSettings,
         extractor: F,
@@ -162,6 +187,10 @@ impl<V> WebsocketPool<V> {
         })
     }
 
+    /// # Get Connection
+    ///
+    /// Returns a sender for one of the WebSocket connections in the pool, using a
+    /// round-robin strategy to distribute the load.
     pub fn connection(&mut self) -> Sender<Subscription<V>> {
         let i = self.next;
         self.next = (self.next + 1) % self.connections.len();
@@ -169,17 +198,24 @@ impl<V> WebsocketPool<V> {
     }
 }
 
+/// # Shutdown Receiver
+///
+/// A wrapper around a `mpsc::Receiver` that also listens for a shutdown signal,
+/// allowing for graceful termination of the worker.
 struct ShutDownReceiver<V> {
     rx: Receiver<V>,
     shutdown: ShutDownListener,
 }
 
 impl<V> ShutDownReceiver<V> {
+    /// # Receive Message
+    ///
+    /// Asynchronously receives a message from the channel, returning `None` if the
+    /// shutdown signal is received.
     async fn recv(&mut self) -> Option<V> {
-        if let Some(v) = self.rx.recv().await {
-            return Some(v);
+        tokio::select! {
+            Some(v) = self.rx.recv() => Some(v),
+            _ = self.shutdown.recv() => None,
         }
-        let _ = self.shutdown.recv().await;
-        None
     }
 }

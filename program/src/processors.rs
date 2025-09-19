@@ -9,11 +9,17 @@ use solana_program::{
 
 use crate::SEEDS;
 
+/// # Prepare Buffer
+///
+/// A helper function to copy data into a buffer at a specified index.
 fn prepare_buffer(index: &mut usize, target: &mut [u8], data: &[u8]) {
     target[*index..*index + data.len()].copy_from_slice(data);
     *index += data.len();
 }
 
+/// # Initialize Account
+///
+/// Initializes a new Program Derived Address (PDA) with the specified space and seeds.
 pub fn init_account(
     iter: &mut std::slice::Iter<AccountInfo>,
     space: u32,
@@ -36,6 +42,9 @@ pub fn init_account(
     Ok(())
 }
 
+/// # Delegate Account
+///
+/// Delegates a PDA to the Ephemeral Rollup (ER) program.
 pub fn delegate_account(accounts: &[AccountInfo], seed: u8) -> ProgramResult {
     let accounts = DelegateAccounts::try_from(accounts)?;
     let mut extra_seeds = (accounts.pda.data_len() as u32).to_le_bytes().to_vec();
@@ -47,6 +56,9 @@ pub fn delegate_account(accounts: &[AccountInfo], seed: u8) -> ProgramResult {
     Ok(())
 }
 
+/// # Simple Byte Set
+///
+/// Fills an account's data with a simple byte pattern.
 pub fn simple_byte_set(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> ProgramResult {
     let pda = next_account_info(iter)?;
     if pda.lamports() == 0 {
@@ -69,6 +81,9 @@ pub fn simple_byte_set(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> Pro
     Ok(())
 }
 
+/// # Multi-Account Read
+///
+/// Reads the data from multiple accounts and writes the sum of their lengths to a PDA.
 pub fn multi_account_read(
     iter: &mut std::slice::Iter<AccountInfo>,
     accounts: &[AccountInfo],
@@ -96,6 +111,9 @@ pub fn multi_account_read(
     Ok(())
 }
 
+/// # Expensive Hash Compute
+///
+/// Performs a computationally expensive hash calculation to stress the validator.
 pub fn expensive_hash_compute(
     iter: &mut std::slice::Iter<AccountInfo>,
     id: u64,
@@ -123,6 +141,9 @@ pub fn expensive_hash_compute(
     Ok(())
 }
 
+/// # Account Data Copy
+///
+/// Copies the data from one account to another.
 pub fn account_data_copy(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> ProgramResult {
     let source = next_account_info(iter)?;
     let destination = next_account_info(iter)?;
@@ -145,6 +166,9 @@ pub fn account_data_copy(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> P
     Ok(())
 }
 
+/// # Read Accounts Data
+///
+/// Reads the data from a list of accounts and logs their sizes.
 pub fn read_accounts_data(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> ProgramResult {
     while let Ok(account) = next_account_info(iter) {
         msg!(
@@ -157,6 +181,9 @@ pub fn read_accounts_data(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> 
     Ok(())
 }
 
+/// # Commit Accounts
+///
+/// Commits a list of accounts to the base chain.
 pub fn commit_accounts(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> ProgramResult {
     let payer = next_account_info(iter)?;
     let magic_context = next_account_info(iter)?;
