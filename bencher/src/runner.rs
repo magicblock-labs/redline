@@ -16,7 +16,15 @@ use core::{
 };
 use keypair::Keypair;
 use signer::EncodableKey;
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{
+    collections::HashMap,
+    rc::Rc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::sync::oneshot;
 
 /// # Bench Runner
@@ -45,6 +53,8 @@ pub struct BenchRunner {
     config: Config,
     /// A mechanism for gracefully shutting down the benchmark.
     shutdown: ShutDown,
+    /// Shared benchmark progress indicator value
+    progress: Arc<AtomicU64>,
 }
 
 type AccountConfirmationReceiver = Option<oneshot::Receiver<u64>>;
@@ -54,7 +64,11 @@ impl BenchRunner {
     /// # New Bench Runner
     ///
     /// Creates a new `BenchRunner` instance, initializing all the necessary components.
-    pub async fn new(signer: Keypair, config: Config) -> BenchResult<Self> {
+    pub async fn new(
+        signer: Keypair,
+        config: Config,
+        progress: Arc<AtomicU64>,
+    ) -> BenchResult<Self> {
         // Create a new HTTP connection to the ephemeral node. This is used for fetching the blockhash.
         let ephem_conn = Connection::new(
             &config.connection.ephem_url,
@@ -139,6 +153,7 @@ impl BenchRunner {
             transfer_manager,
             config,
             shutdown,
+            progress,
         })
     }
 
@@ -152,11 +167,9 @@ impl BenchRunner {
             self.transfer_manager.transfer();
 
             self.step(i).await;
+            // report progress
+            self.progress.fetch_add(1, Ordering::Relaxed);
         }
-        tracing::info!(
-            iterations = self.config.benchmark.iterations,
-            "The benchmark run is complete",
-        );
 
         BenchResults {
             config: self.config,
