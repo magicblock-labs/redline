@@ -96,5 +96,7 @@ impl TransferManager {
         });
         // Add the PDA back to the end of the queue to be used again later.
         self.pdas.push_back(pda);
+        // Reset the timer
+        self.last = Instant::now();
     }
 }
