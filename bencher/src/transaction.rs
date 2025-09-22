@@ -2,7 +2,7 @@ use core::types::BenchMode;
 use hash::Hash;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
-use program::{instruction::Instruction, utils::derive_pda};
+use program::instruction::Instruction;
 use pubkey::Pubkey;
 use rand::{
     distributions::WeightedIndex, prelude::Distribution, rngs::ThreadRng, seq::SliceRandom,
@@ -51,14 +51,6 @@ pub struct SimpleByteSetProvider {
 pub struct HighCuCostProvider {
     accounts: Vec<Pubkey>,
     iters: u32,
-}
-
-/// # TriggerClones Provider
-///
-/// Generates transactions that trigger account cloning.
-pub struct TriggerClonesProvider {
-    ro_accounts: Vec<Pubkey>,
-    pda: Pubkey,
 }
 
 /// # ReadWrite Provider
@@ -147,28 +139,6 @@ impl TransactionProvider for ReadWriteProvider {
 
     fn accounts(&self) -> Vec<Pubkey> {
         self.accounts.clone()
-    }
-}
-
-impl TransactionProvider for TriggerClonesProvider {
-    fn name(&self) -> &'static str {
-        "TriggerClones"
-    }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
-        let ix = Instruction::MultiAccountRead { id };
-        let mut accounts = vec![AccountMeta::new(self.pda, false)];
-        accounts.extend(
-            self.ro_accounts
-                .iter()
-                .map(|&a| AccountMeta::new_readonly(a, false)),
-        );
-        self.wrap_ix(ix, accounts)
-    }
-
-    fn accounts(&self) -> Vec<Pubkey> {
-        let mut accounts = self.ro_accounts.clone();
-        accounts.push(self.pda);
-        accounts
     }
 }
 
@@ -263,10 +233,6 @@ pub fn make_provider(
             })
         }
         BenchMode::SimpleByteSet => Box::new(SimpleByteSetProvider { accounts }),
-        BenchMode::TriggerClones { .. } => Box::new(TriggerClonesProvider {
-            pda: derive_pda(base, space, 1).0,
-            ro_accounts: accounts,
-        }),
         BenchMode::ReadWrite => Box::new(ReadWriteProvider {
             accounts,
             rng: thread_rng(),

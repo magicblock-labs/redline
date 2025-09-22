@@ -25,6 +25,7 @@ pubkey = { package = "solana-pubkey", version = "2", features = ["curve25519"] }
 keypair = { package = "solana-keypair", version = "2.2" }
 signer = { package = "solana-signer", version = "2.2" }
 instruction = { package = "solana-instruction", version = "2.2" }
+systransaction = { package = "solana-system-transaction", version = "2.2" }
 # logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }

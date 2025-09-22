@@ -109,4 +109,5 @@ mod rate;
 mod requests;
 mod runner;
 mod transaction;
+mod transfer;
 mod websocket;

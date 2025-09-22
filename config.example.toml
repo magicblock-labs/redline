@@ -20,8 +20,8 @@ chain-url = "http://api.devnet.solana.com"
 # URL of the ephemeral node to connect to.
 ephem-url = "http://127.0.0.1:8899"
 # Type of HTTP connection to use.
-# Options: "http1" or { http2 = { streams = <NUM> } }
-http-connection-type = { http2 = { streams = 128 } }
+# Options: "http1" or "http2"
+http-connection-type = "http2"
 # Maximum number of HTTP connections to establish.
 http-connections-count = 16
 # Maximum number of WebSocket connections to establish.

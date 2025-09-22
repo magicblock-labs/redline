@@ -32,21 +32,8 @@ pub fn compare(
     let mut table = Table::new();
     let mut regression_detected = false;
 
-    for (mode, this_stats) in this.transaction_stats {
-        if let Some(that_stats) = that.transaction_stats.remove(&mode) {
-            let metrics = vec![("Send Latency (μs)", this_stats, that_stats, 1.0)];
-            add_metrics_to_table(
-                &mut table,
-                &mode,
-                metrics,
-                sensitivity,
-                &mut regression_detected,
-            );
-        }
-    }
-
-    for (mode, this_stats) in this.rpc_request_stats {
-        if let Some(that_stats) = that.rpc_request_stats.remove(&mode) {
+    for (mode, this_stats) in this.request_stats {
+        if let Some(that_stats) = that.request_stats.remove(&mode) {
             let metrics = vec![("Request Latency (μs)", this_stats, that_stats, 1.0)];
             add_metrics_to_table(
                 &mut table,

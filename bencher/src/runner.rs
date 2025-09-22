@@ -1,5 +1,3 @@
-// bencher/src/runner.rs
-
 use crate::{
     blockhash::BlockHashProvider,
     confirmation::{Confirmations, ConfirmationsDB, EventConfirmer},
@@ -8,15 +6,16 @@ use crate::{
     payload,
     rate::RateManager,
     requests::{make_builder, RequestBuilder},
+    transfer::TransferManager,
     websocket::{Subscription, WebsocketPool},
     BenchResult, ShutDown, ShutDownSender,
 };
 use core::{
     config::Config,
     stats::{BenchStatistics, ObservationsStats},
-    types::BenchMode,
 };
 use keypair::Keypair;
+use signer::EncodableKey;
 use std::{collections::HashMap, rc::Rc, time::Duration};
 use tokio::sync::oneshot;
 
@@ -30,6 +29,7 @@ pub struct BenchRunner {
     account_confirmations: ConfirmationsDB<u64>,
     signature_confirmations: ConfirmationsDB<bool>,
     delivery_confirmations: HashMap<&'static str, ConfirmationsDB<()>>,
+    transfer_manager: TransferManager,
     rate_manager: RateManager,
     config: Config,
     shutdown: ShutDown,
@@ -71,6 +71,7 @@ impl BenchRunner {
 
         let request_builder = make_builder(&config, signer, blockhash_provider.clone());
 
+        let accounts = request_builder.accounts();
         if config.confirmations.subscribe_to_accounts {
             let mut accounts_websocket = WebsocketPool::new(
                 &config.connection,
@@ -79,13 +80,13 @@ impl BenchRunner {
             )
             .await?;
             let encoding = config.data.account_encoding;
-            for (id, pk) in request_builder.accounts().into_iter().enumerate() {
+            for (id, pk) in accounts.iter().enumerate() {
                 let id = id as u64;
                 let tx = account_confirmations.borrow().tx.clone();
                 let con = accounts_websocket.connection();
                 let sub = Subscription {
                     tx,
-                    payload: payload::account_subscription(pk, encoding, id),
+                    payload: payload::account_subscription(*pk, encoding, id),
                     oneshot: false,
                     id,
                 };
@@ -93,6 +94,10 @@ impl BenchRunner {
             }
             tokio::time::sleep(Duration::from_secs(1)).await
         }
+        let vault =
+            Keypair::read_from_file("keypairs/vault.json").expect("failed to read vault keypair");
+        let transfer_manager =
+            TransferManager::new(&config, vault, &accounts, blockhash_provider).await;
 
         Ok(Self {
             request_builder,
@@ -102,6 +107,7 @@ impl BenchRunner {
             signature_confirmations,
             delivery_confirmations: HashMap::new(),
             rate_manager,
+            transfer_manager,
             config,
             shutdown,
         })
@@ -112,6 +118,9 @@ impl BenchRunner {
     /// Starts the benchmark, sending requests at the configured rate.
     pub async fn run(mut self) -> BenchResults {
         for i in 0..self.config.benchmark.iterations {
+            // this will trigger an account update on chain and subsequent clone on ER
+            self.transfer_manager.transfer();
+
             self.step(i).await;
         }
         tracing::info!(
@@ -248,29 +257,15 @@ impl BenchResults {
             };
         }
 
-        let mut transaction_stats = HashMap::new();
-        let mut rpc_request_stats = HashMap::new();
+        let mut request_stats = HashMap::new();
 
         for (mode_name, confirmations) in self.delivery_confirmations {
-            let is_rpc = matches!(
-                self.config.benchmark.mode,
-                BenchMode::GetAccountInfo
-                    | BenchMode::GetMultipleAccounts
-                    | BenchMode::GetBalance
-                    | BenchMode::GetTokenAccountBalance
-            );
-
-            if is_rpc {
-                rpc_request_stats.insert(mode_name.to_string(), finalize!(confirmations));
-            } else {
-                transaction_stats.insert(mode_name.to_string(), finalize!(confirmations));
-            }
+            request_stats.insert(mode_name.to_string(), finalize!(confirmations));
         }
 
         BenchStatistics {
             configuration: json::to_value(&self.config).unwrap(),
-            transaction_stats,
-            rpc_request_stats,
+            request_stats,
             signature_confirmation_latency: finalize!(self.signature_confirmations),
             account_update_latency: finalize!(self.account_confirmations),
             rps: self.rate,

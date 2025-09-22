@@ -24,6 +24,7 @@ signature = { package = "solana-signature", version = "2.2" }
 signer = { workspace = true }
 instruction = { workspace = true }
 hash = { package = "solana-hash", version = "2.2" }
+systransaction = { workspace = true }
 
 program = { path = "../program", package = "redline-program" }
 core = { path = "../core", package = "redline-core" }
