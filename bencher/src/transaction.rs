@@ -213,14 +213,13 @@ impl TransactionProvider for MixedProvider {
 pub fn make_provider(
     mode: &BenchMode,
     base: Pubkey,
-    space: u32,
     accounts: Vec<Pubkey>,
 ) -> Box<dyn TransactionProvider> {
     match mode {
         BenchMode::Mixed(modes) => {
             let providers = modes
                 .iter()
-                .map(|m| make_provider(&m.mode, base, space, accounts.clone()))
+                .map(|m| make_provider(&m.mode, base, accounts.clone()))
                 .collect::<Vec<_>>();
             let weights = modes.iter().map(|m| m.weight).collect::<Vec<_>>();
             let distribution = WeightedIndex::new(weights).unwrap();

@@ -202,12 +202,8 @@ impl RequestBuilder for MixedRequestBuilder {
     }
 }
 
-// --- Factory Function ---
-
-/// # Make Builder
-///
-/// A factory function that creates a request builder based on the provided benchmark configuration.
 pub fn make_builder(
+    mode: &BenchMode,
     config: &Config,
     signer: Keypair,
     blockhash_provider: BlockHashProvider,
@@ -218,29 +214,6 @@ pub fn make_builder(
     let accounts: Vec<Pubkey> = (1..=config.benchmark.accounts_count)
         .map(|seed| derive_pda(base, space, seed).0)
         .collect();
-
-    make_mode_provider(
-        &config.benchmark.mode,
-        accounts,
-        encoding,
-        base,
-        space,
-        signer,
-        blockhash_provider,
-        config.benchmark.accounts_count,
-    )
-}
-
-fn make_mode_provider(
-    mode: &BenchMode,
-    accounts: Vec<Pubkey>,
-    encoding: AccountEncoding,
-    base: Pubkey,
-    space: u32,
-    signer: Keypair,
-    blockhash_provider: BlockHashProvider,
-    accounts_count: u8,
-) -> Box<dyn RequestBuilder> {
     match mode {
         BenchMode::GetAccountInfo => Box::new(GetAccountInfoRequestBuilder { accounts, encoding }),
         BenchMode::GetMultipleAccounts => {
@@ -255,15 +228,11 @@ fn make_mode_provider(
                 .iter()
                 .map(|m| {
                     (
-                        make_mode_provider(
+                        make_builder(
                             &m.mode,
-                            accounts.clone(),
-                            encoding,
-                            base,
-                            space,
+                            config,
                             signer.insecure_clone(),
                             blockhash_provider.clone(),
-                            accounts_count,
                         ),
                         m.weight,
                     )
@@ -280,8 +249,8 @@ fn make_mode_provider(
             })
         }
         // Handle TPS modes by creating a TransactionRequestBuilder
-        tps_mode => Box::new(TransactionRequestBuilder {
-            provider: crate::transaction::make_provider(tps_mode, base, space, accounts),
+        mode => Box::new(TransactionRequestBuilder {
+            provider: crate::transaction::make_provider(mode, base, accounts),
             signer,
             blockhash_provider,
             signature: None,

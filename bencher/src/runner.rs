@@ -69,7 +69,12 @@ impl BenchRunner {
         let signature_confirmations = signatures_confirmer.db.clone();
         tokio::task::spawn_local(signatures_confirmer.confirm_by_id());
 
-        let request_builder = make_builder(&config, signer, blockhash_provider.clone());
+        let request_builder = make_builder(
+            &config.benchmark.mode,
+            &config,
+            signer,
+            blockhash_provider.clone(),
+        );
 
         let accounts = request_builder.accounts();
         if config.confirmations.subscribe_to_accounts {
