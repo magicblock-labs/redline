@@ -10,10 +10,8 @@ use std::collections::HashMap;
 pub struct BenchStatistics {
     /// The configuration used for the benchmark.
     pub configuration: json::Value,
-    /// A map of statistics for each transaction-based benchmark mode.
-    pub transaction_stats: HashMap<String, ObservationsStats>,
     /// A map of statistics for each RPC-based benchmark mode.
-    pub rpc_request_stats: HashMap<String, ObservationsStats>,
+    pub request_stats: HashMap<String, ObservationsStats>,
     /// Latency for receiving signature confirmations.
     pub signature_confirmation_latency: ObservationsStats,
     /// Latency for receiving account updates.
@@ -46,21 +44,14 @@ impl BenchStatistics {
             return Self::default();
         }
         let configuration = std::mem::take(&mut stats.first_mut().unwrap().configuration);
-        let mut transaction_stats = HashMap::new();
-        let mut rpc_request_stats = HashMap::new();
+        let mut request_stats = HashMap::new();
         let mut rps = Vec::new();
         let mut account_update_stats = Vec::new();
         let mut signature_confirmation_stats = Vec::new();
 
         for s in stats {
-            for (key, value) in s.transaction_stats {
-                transaction_stats
-                    .entry(key)
-                    .or_insert_with(Vec::new)
-                    .push(value);
-            }
-            for (key, value) in s.rpc_request_stats {
-                rpc_request_stats
+            for (key, value) in s.request_stats {
+                request_stats
                     .entry(key)
                     .or_insert_with(Vec::new)
                     .push(value);
@@ -70,21 +61,16 @@ impl BenchStatistics {
             rps.push(s.rps);
         }
 
-        let transaction_stats = transaction_stats
-            .into_iter()
-            .map(|(key, value)| (key, ObservationsStats::merge(value)))
-            .collect();
-        let rpc_request_stats = rpc_request_stats
+        let request_stats = request_stats
             .into_iter()
             .map(|(key, value)| (key, ObservationsStats::merge(value)))
             .collect();
 
         Self {
             configuration,
-            transaction_stats,
             account_update_latency: ObservationsStats::merge(account_update_stats),
             signature_confirmation_latency: ObservationsStats::merge(signature_confirmation_stats),
-            rpc_request_stats,
+            request_stats,
             rps: ObservationsStats::merge(rps),
         }
     }

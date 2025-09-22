@@ -1,24 +1,31 @@
-![redline-logo.png](logo.png)
-# REDLINE: A Solana Benchmarking Tool
+Of course. I've updated the `README.md` file to be more specific to the MagicBlock validator, expanded the usage section based on the `makefile`, and maintained a professional tone throughout.
 
-Welcome to **REDLINE**, a benchmarking tool for Solana validators. We built REDLINE to help us understand how our own validators perform under heavy loads. We're sharing it in the hope that it might be useful for other developers and validator operators as well.
+Here is the updated `README.md`:
 
-With REDLINE, you can simulate high-load scenarios, identify performance bottlenecks, and get a better sense of how your Solana infrastructure holds up. It offers flexible configuration options and a variety of benchmark modes to help you test your validator's performance.
+-----
+
+# REDLINE: A MagicBlock Validator Benchmarking Tool
+
+Welcome to **REDLINE**, a high-performance benchmarking tool specifically designed for load-testing MagicBlock validators. REDLINE was developed to analyze and ensure the performance of our validator infrastructure under heavy, real-world conditions. We are sharing it with the community in the hope that it will be a valuable resource for other developers and validator operators.
+
+With REDLINE, you can simulate high-throughput scenarios, identify performance bottlenecks, and gain a comprehensive understanding of your validator's operational limits. It offers a suite of flexible configuration options and a variety of benchmark modes to rigorously test every aspect of your validator's performance.
+
+> **Note on Compatibility**: While REDLINE is optimized for MagicBlock validators, its RPC-based benchmark modes can be used to test any validator that conforms to the official Solana RPC-API specification.
 
 -----
 
 ## Features
 
-Here are some of the things you can do with REDLINE:
+Here are some of the key features of REDLINE:
 
-  * **Unified Benchmark Runner**: Run both TPS and RPS benchmarks, and even mix them together in the same run.
-  * **Multi-threaded Execution**: Simulate real-world, high-load conditions by running multiple benchmark instances in parallel.
-  * **Per-Request Statistics**: Get detailed stats on the performance of each benchmark mode.
+  * **Unified Benchmark Runner**: Run both TPS (Transactions Per Second) and RPS (Requests Per Second) benchmarks, and even mix them together in the same run.
+  * **Multi-threaded Execution**: Simulate realistic, high-load conditions by running multiple benchmark instances in parallel.
+  * **Per-Request Statistics**: Get detailed statistics on the performance of each benchmark mode, including latency and throughput metrics.
   * **Flexible Benchmark Modes**: Test different aspects of your validator's performance with a variety of built-in benchmark modes.
-  * **Customizable Configuration**: Use a simple TOML file to configure every aspect of the benchmark.
-  * **Comprehensive Reporting**: Generate detailed, human-readable reports from your benchmark results.
-  * **Minimal Resource Footprint**: REDLINE is designed to run locally alongside your validator without skewing the results.
-  * **Accurate Measurements**: REDLINE is designed to provide accurate measurements of latencies and throughput.
+  * **Customizable Configuration**: Use a simple TOML file to configure every aspect of the benchmark, from connection settings to workload mix.
+  * **Comprehensive Reporting**: Generate detailed, human-readable reports from your benchmark results, and compare performance between runs.
+  * **Minimal Resource Footprint**: REDLINE is designed to run locally alongside your validator without significantly skewing the results.
+  * **Accurate Measurements**: REDLINE is engineered to provide precise measurements of latencies and throughput for in-depth performance analysis.
 
 -----
 
@@ -39,7 +46,7 @@ cd redline
 make build
 ```
 
-This will build both the `redline` and `redline-assist` binaries in release mode.
+This will build both the `redline` and `redline-assist` binaries in release mode and place them in the `target/release` directory.
 
 ### 3\. Prepare the Benchmark
 
@@ -49,7 +56,7 @@ Before running a benchmark, you'll need to create and fund the necessary account
 make prepare CONFIG=config.example.toml
 ```
 
-This will get all the accounts ready for the benchmark.
+This command uses the `redline-assist` tool to get all the on-chain accounts ready for the benchmark based on your configuration file.
 
 ### 4\. Run the Benchmark
 
@@ -65,19 +72,19 @@ This will start the benchmark with the parameters specified in your configuratio
 
 ## Usage
 
-REDLINE includes two binaries: `redline` for running the benchmark and `redline-assist` for some helpful utilities.
+REDLINE includes two binaries: `redline` for running the benchmark and `redline-assist` for helper utilities. The `makefile` provides a convenient interface for common operations.
 
 | Command | Description |
 | --- | --- |
-| `make build` | Builds the `redline` and `redline-assist` binaries. |
-| `make prepare` | Prepares the environment for a benchmark run. |
-| `make bench` | Runs the benchmark with the specified configuration. |
-| `make report` | Generates a detailed report from the latest benchmark results. |
-| `make bench-report` | Runs the benchmark and then generates a report. |
-| `make compare` | Compares the results of the two most recent benchmark runs. |
-| `make bench-compare`| Runs the benchmark and then compares the results with the previous run. |
-| `make clean` | Deletes the latest benchmark result file. |
-| `make clean-all` | Deletes all benchmark result files. |
+| `make build` | Compiles the `redline` and `redline-assist` binaries in release mode. |
+| `make prepare` | Prepares the environment for a benchmark run by creating and funding the necessary accounts, using the specified `CONFIG` file. |
+| `make bench` | Runs the benchmark with the configuration from the specified `CONFIG` file. Results are saved as a timestamped JSON file in the `runs/` directory. |
+| `make report` | Generates a detailed, human-readable report from the latest benchmark results file. |
+| `make bench-report` | A convenience command that first runs the benchmark and then immediately generates a report. |
+| `make compare` | Compares the results of the two most recent benchmark runs and highlights performance regressions or improvements. You can customize the `SENSITIVITY` of the regression detection (default is 15%). |
+| `make bench-compare`| Runs a new benchmark and then compares its results with the previous run. |
+| `make clean` | Deletes the latest benchmark result file from the `runs/` directory. |
+| `make clean-all` | Deletes the entire `runs/` directory, removing all benchmark result files. |
 
 -----
 
@@ -95,8 +102,8 @@ chain-url = "http://api.devnet.solana.com"
 # The URL of the ephemeral node.
 ephem-url = "http://127.0.0.1:8899"
 # The type of HTTP connection to use.
-# Options: "http1" or { http2 = { streams = 128 } }
-http-connection-type = { http2 = { streams = 128 } }
+# Options: "http1" or "http2"
+http-connection-type = "http2"
 # The maximum number of HTTP connections.
 http-connections-count = 16
 # The maximum number of WebSocket connections.
@@ -109,6 +116,8 @@ iterations = 100000
 rate = 3000
 # The number of concurrent tasks.
 concurrency = 64
+# The frequency, in milliseconds, at which account cloning should be triggered.
+clone-frequency-ms = 1000
 # Whether to perform a preflight check for transactions.
 preflight-check = false
 # The number of accounts to use for the benchmark.
@@ -144,4 +153,6 @@ account-size = "bytes128"
 
 ## Conclusion
 
-We hope REDLINE is a useful tool for you. If you have any questions or feedback, please feel free to open an issue or pull request on our GitHub repository.
+We hope REDLINE proves to be a useful tool for testing your validator infrastructure. If you
+have any questions or feedback, please feel free to open an issue or pull request on our GitHub
+repository.

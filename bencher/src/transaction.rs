@@ -2,7 +2,7 @@ use core::types::BenchMode;
 use hash::Hash;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
-use program::{instruction::Instruction, utils::derive_pda};
+use program::instruction::Instruction;
 use pubkey::Pubkey;
 use rand::{
     distributions::WeightedIndex, prelude::Distribution, rngs::ThreadRng, seq::SliceRandom,
@@ -14,7 +14,8 @@ use transaction::Transaction;
 
 /// # Transaction Provider Trait
 ///
-/// A trait for generating Solana transactions for different benchmark modes.
+/// A generic trait for building requests, designed to unify both transaction-based
+/// and RPC-based request generation.
 pub trait TransactionProvider {
     /// Returns the name of the benchmark mode.
     fn name(&self) -> &'static str;
@@ -41,29 +42,24 @@ pub trait TransactionProvider {
 /// # SimpleByteSet Provider
 ///
 /// Generates simple transactions that write a small set of bytes to an account.
+/// This is useful for basic throughput testing.
 pub struct SimpleByteSetProvider {
     accounts: Vec<Pubkey>,
 }
 
 /// # HighCuCost Provider
 ///
-/// Generates transactions with a high computational cost.
+/// Generates transactions with a high computational cost to stress the validator's
+/// processing capabilities.
 pub struct HighCuCostProvider {
     accounts: Vec<Pubkey>,
     iters: u32,
 }
 
-/// # TriggerClones Provider
-///
-/// Generates transactions that trigger account cloning.
-pub struct TriggerClonesProvider {
-    ro_accounts: Vec<Pubkey>,
-    pda: Pubkey,
-}
-
 /// # ReadWrite Provider
 ///
-/// Generates transactions that perform read and write operations across multiple accounts.
+/// Generates transactions that perform read and write operations across multiple accounts,
+/// which is useful for testing lock contention.
 pub struct ReadWriteProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
@@ -71,7 +67,7 @@ pub struct ReadWriteProvider {
 
 /// # ReadOnly Provider
 ///
-/// Generates read-only transactions to test for parallel processing performance.
+/// Generates read-only transactions to measure parallel processing performance.
 pub struct ReadOnlyProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
@@ -80,7 +76,7 @@ pub struct ReadOnlyProvider {
 
 /// # Commit Provider
 ///
-/// Generates transactions that commit the state to the base chain.
+/// Generates transactions that commit the state to the base chain in the Ephemeral Rollup.
 pub struct CommitProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
@@ -91,6 +87,7 @@ pub struct CommitProvider {
 /// # Mixed Provider
 ///
 /// A transaction provider that combines multiple transaction providers to generate a mixed workload.
+/// The distribution of transactions is determined by the weights assigned to each provider.
 pub struct MixedProvider {
     providers: Vec<Box<dyn TransactionProvider>>,
     rng: ThreadRng,
@@ -104,6 +101,8 @@ impl TransactionProvider for SimpleByteSetProvider {
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::SimpleByteSet { id };
+        // The PDA is selected based on the request ID, which ensures that the
+        // transactions are distributed across all available accounts.
         let pda = self.accounts[id as usize % self.accounts.len()];
         let accounts = vec![AccountMeta::new(pda, false)];
         self.wrap_ix(ix, accounts)
@@ -138,6 +137,7 @@ impl TransactionProvider for ReadWriteProvider {
         "ReadWrite"
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+        // Randomly selects two accounts for the read-write operation.
         let mut accounts = self.accounts.choose_multiple(&mut self.rng, 2).copied();
         let ix = Instruction::AccountDataCopy { id };
         let ro = AccountMeta::new_readonly(accounts.next().unwrap(), false);
@@ -150,33 +150,12 @@ impl TransactionProvider for ReadWriteProvider {
     }
 }
 
-impl TransactionProvider for TriggerClonesProvider {
-    fn name(&self) -> &'static str {
-        "TriggerClones"
-    }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
-        let ix = Instruction::MultiAccountRead { id };
-        let mut accounts = vec![AccountMeta::new(self.pda, false)];
-        accounts.extend(
-            self.ro_accounts
-                .iter()
-                .map(|&a| AccountMeta::new_readonly(a, false)),
-        );
-        self.wrap_ix(ix, accounts)
-    }
-
-    fn accounts(&self) -> Vec<Pubkey> {
-        let mut accounts = self.ro_accounts.clone();
-        accounts.push(self.pda);
-        accounts
-    }
-}
-
 impl TransactionProvider for ReadOnlyProvider {
     fn name(&self) -> &'static str {
         "ReadOnly"
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+        // Randomly selects a set of accounts for the read-only operation.
         let accounts = self
             .accounts
             .choose_multiple(&mut self.rng, self.count)
@@ -204,6 +183,7 @@ impl TransactionProvider for CommitProvider {
             AccountMeta::new(MAGIC_CONTEXT_ID, false),
             AccountMeta::new_readonly(MAGIC_PROGRAM_ID, false),
         ];
+        // Randomly selects a set of accounts to be committed.
         accounts.extend(
             self.accounts
                 .choose_multiple(&mut self.rng, self.count)
@@ -223,6 +203,7 @@ impl TransactionProvider for MixedProvider {
         self.last_name
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+        // Selects a provider based on the weighted distribution.
         let index = self.distribution.sample(&mut self.rng);
         let generator = &mut self.providers[index];
         self.last_name = generator.name();
@@ -243,14 +224,13 @@ impl TransactionProvider for MixedProvider {
 pub fn make_provider(
     mode: &BenchMode,
     base: Pubkey,
-    space: u32,
     accounts: Vec<Pubkey>,
 ) -> Box<dyn TransactionProvider> {
     match mode {
         BenchMode::Mixed(modes) => {
             let providers = modes
                 .iter()
-                .map(|m| make_provider(&m.mode, base, space, accounts.clone()))
+                .map(|m| make_provider(&m.mode, base, accounts.clone()))
                 .collect::<Vec<_>>();
             let weights = modes.iter().map(|m| m.weight).collect::<Vec<_>>();
             let distribution = WeightedIndex::new(weights).unwrap();
@@ -263,10 +243,6 @@ pub fn make_provider(
             })
         }
         BenchMode::SimpleByteSet => Box::new(SimpleByteSetProvider { accounts }),
-        BenchMode::TriggerClones { .. } => Box::new(TriggerClonesProvider {
-            pda: derive_pda(base, space, 1).0,
-            ro_accounts: accounts,
-        }),
         BenchMode::ReadWrite => Box::new(ReadWriteProvider {
             accounts,
             rng: thread_rng(),
@@ -290,7 +266,8 @@ pub fn make_provider(
             rng: thread_rng(),
             payer: base,
         }),
-        // This function is only for transaction-based modes
+        // This function is only for transaction-based modes, so it will panic
+        // if an RPC-based mode is provided.
         _ => panic!("Unsupported mode for make_provider"),
     }
 }

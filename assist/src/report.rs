@@ -83,12 +83,8 @@ fn print_results_table(stats: &BenchStatistics) {
         Cell::new("Stddev").with_style(Attr::Bold),
     ]));
 
-    for (mode, stats) in &stats.transaction_stats {
-        add_transaction_stats_to_table(&mut table, mode, *stats);
-    }
-
-    for (mode, stats) in &stats.rpc_request_stats {
-        add_rpc_request_stats_to_table(&mut table, mode, *stats);
+    for (mode, stats) in &stats.request_stats {
+        add_request_stats_to_table(&mut table, mode, *stats);
     }
 
     add_stats_row!(
@@ -106,20 +102,10 @@ fn print_results_table(stats: &BenchStatistics) {
     table.printstd();
 }
 
-/// # Add Transaction Stats to Table
-///
-/// A helper function to add transaction statistics to the results table.
-fn add_transaction_stats_to_table(table: &mut Table, mode: &str, stats: ObservationsStats) {
-    table.add_row(Row::new(vec![Cell::new(&format!("[{}]", mode))
-        .with_style(Attr::Bold)
-        .with_hspan(8)]));
-    add_stats_row!(table, "  Send Latency (μs)", Some(stats));
-}
-
 /// # Add RPC Request Stats to Table
 ///
 /// A helper function to add RPC request statistics to the results table.
-fn add_rpc_request_stats_to_table(table: &mut Table, mode: &str, stats: ObservationsStats) {
+fn add_request_stats_to_table(table: &mut Table, mode: &str, stats: ObservationsStats) {
     table.add_row(Row::new(vec![Cell::new(&format!("[{}]", mode))
         .with_style(Attr::Bold)
         .with_hspan(8)]));

@@ -7,12 +7,6 @@ use crate::latest_run_output_path;
 ///
 /// Deletes benchmark result files from the output directory. This function can either
 /// remove all results or just the most recent one.
-///
-/// ### Arguments
-///
-/// * `all` - A boolean indicating whether to remove all benchmark results. If `true`, the
-///         entire `runs` directory will be deleted. If `false`, only the latest result
-///         file will be removed.
 pub fn cleanup(all: bool) {
     // If the `all` flag is set, remove the entire `runs` directory and its contents.
     if all {

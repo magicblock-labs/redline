@@ -12,6 +12,7 @@ pub struct Config {
     /// ## Connection Settings
     ///
     /// Defines the network parameters for connecting to the Solana cluster.
+    #[serde(skip_serializing)]
     pub connection: ConnectionSettings,
     /// ## Benchmark Settings
     ///
@@ -61,14 +62,12 @@ impl Config {
 /// # Connection Settings
 ///
 /// Holds the network configuration for connecting to the Solana cluster.
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConnectionSettings {
     /// The URL of the main chain node.
-    #[serde(skip_serializing)]
     pub chain_url: Url,
     /// The URL of the ephemeral node.
-    #[serde(skip_serializing)]
     pub ephem_url: Url,
     /// The type of HTTP connection to use (`http1` or `http2`).
     pub http_connection_type: ConnectionType,
@@ -100,6 +99,10 @@ pub struct BenchmarkSettings {
     ///
     /// A flag to enable or disable the preflight check for transactions.
     pub preflight_check: bool,
+    /// ## Clone frequency
+    ///
+    /// The frequency in milliseconds, at which the account cloning should be triggered.
+    pub clone_frequency_ms: u64,
     /// ## Accounts Count
     ///
     /// The number of accounts to use for RPC-based benchmarks.

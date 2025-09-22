@@ -140,9 +140,8 @@ impl Connection {
                 tokio::task::spawn_local(con);
                 InnerConnection::Http1(sender)
             }
-            ConnectionType::Http2 { streams } => {
+            ConnectionType::Http2 => {
                 let (sender, con) = hyper::client::conn::http2::Builder::new(TokioExecutor::new())
-                    .max_concurrent_streams(streams)
                     .handshake(io)
                     .await?;
                 tokio::task::spawn_local(con);

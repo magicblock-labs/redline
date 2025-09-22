@@ -1,5 +1,12 @@
 use core::{config::Config, stats::BenchStatistics, types::BenchResult};
-use std::{fs::File, path::PathBuf, rc::Rc, thread::JoinHandle, time::SystemTime};
+use std::{
+    fs::{self, File},
+    path::PathBuf,
+    rc::Rc,
+    sync::{atomic::AtomicU64, Arc},
+    thread::{self, JoinHandle},
+    time::SystemTime,
+};
 
 use json::writer::BufferedWriter;
 use keypair::Keypair;
@@ -7,6 +14,8 @@ use runner::BenchRunner;
 use signer::EncodableKey;
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 use tracing_subscriber::EnvFilter;
+
+use crate::progress::ProgressBar;
 
 /// # Main Entry Point
 ///
@@ -25,18 +34,27 @@ fn main() -> BenchResult<()> {
         .collect::<BenchResult<_>>()?;
 
     let mut handles = Vec::new();
+    // Create a shared atomic counter for tracking progress.
+    let progress = Arc::new(AtomicU64::new(0));
+    // Create and start the progress bar.
+    let progress_bar = ProgressBar::new(
+        config.benchmark.iterations * keypairs.len() as u64,
+        progress.clone(),
+    );
+    let bar = thread::spawn(move || progress_bar.start());
 
     // Spawn a new thread for each keypair, up to the specified parallelism
     for kp in keypairs {
         let cfg = config.clone();
-        let handle = std::thread::spawn(move || {
+        let progress = progress.clone();
+        let handle = thread::spawn(move || {
             let rt = runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap();
             let local = LocalSet::new();
             let bencher = local
-                .block_on(&rt, BenchRunner::new(kp, cfg))
+                .block_on(&rt, BenchRunner::new(kp, cfg, progress))
                 .expect("failed to create bencher");
             let task = local.run_until(bencher.run());
             let results = rt.block_on(task);
@@ -45,12 +63,13 @@ fn main() -> BenchResult<()> {
         });
         handles.push(handle);
     }
+    let _ = bar.join();
 
     // Collect and merge the statistics from all threads
     let stats: Vec<BenchStatistics> = handles
         .into_iter()
         .map(JoinHandle::join)
-        .collect::<std::thread::Result<Vec<BenchStatistics>>>()
+        .collect::<thread::Result<Vec<BenchStatistics>>>()
         .expect("failed to join benchmark thread");
 
     let stats = BenchStatistics::merge(stats);
@@ -58,7 +77,7 @@ fn main() -> BenchResult<()> {
     // Write the aggregated results to a JSON file
     let output = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
     let outdir = PathBuf::from("runs");
-    let _ = std::fs::create_dir(&outdir);
+    let _ = fs::create_dir(&outdir);
     let output = outdir.join(format!("redline-{:0>12}.json", output.as_secs()));
     let writer = File::options()
         .write(true)
@@ -105,8 +124,10 @@ mod confirmation;
 mod extractor;
 mod http;
 mod payload;
+mod progress;
 mod rate;
 mod requests;
 mod runner;
 mod transaction;
+mod transfer;
 mod websocket;

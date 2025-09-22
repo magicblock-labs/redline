@@ -35,11 +35,6 @@ async fn main() -> BenchResult<()> {
 /// # Latest Run Output Path
 ///
 /// A helper function to find the path to the latest benchmark result file.
-///
-/// ### Arguments
-///
-/// * `count` - The number of recent runs to skip. For example, `1` will return the
-///           most recent run, while `2` will return the second most recent.
 fn latest_run_output_path(mut count: usize) -> PathBuf {
     let dir = fs::read_dir(RUNS_OUTPUT_PATH)
         .inspect_err(

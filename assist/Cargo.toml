@@ -18,7 +18,7 @@ signer = { workspace = true }
 pubkey = { workspace = true }
 instruction = { workspace = true }
 transaction = { workspace = true }
-systransaction = { package = "solana-system-transaction", version = "2.2" }
+systransaction = { workspace = true }
 
 
 structopt = "0.3"
@@ -33,5 +33,3 @@ program = { path = "../program", package = "redline-program" }
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-
-

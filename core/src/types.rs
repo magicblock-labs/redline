@@ -17,9 +17,6 @@ pub type BenchResult<T> = Result<T, DynError>;
 pub enum BenchMode {
     /// **(TPS)** Writes a small set of bytes to a specified number of accounts.
     SimpleByteSet,
-    /// **(TPS)** Triggers account cloning by periodically airdropping tokens to read-only accounts.
-    #[serde(rename_all = "kebab-case")]
-    TriggerClones { clone_frequency_secs: u64 },
     /// **(TPS)** Executes transactions with high computational cost to stress the validator's processing capacity.
     HighCuCost { iters: u32 },
     /// **(TPS)** Performs read and write operations across a set of accounts to test for lock contention.
@@ -61,7 +58,7 @@ pub enum ConnectionType {
     /// Use HTTP/1.1 for all connections.
     Http1,
     /// Use HTTP/2 with a specified number of streams.
-    Http2 { streams: u32 },
+    Http2,
 }
 
 /// Defines the size of accounts to be used in the benchmark.
