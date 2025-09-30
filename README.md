@@ -1,3 +1,4 @@
+![logo](logo.png)
 # REDLINE: A MagicBlock Validator Benchmarking Tool
 
 Meet the **REDLINE**, a high-performance benchmarking tool specifically designed for load-testing MagicBlock validators. REDLINE was developed to analyze and ensure the performance of our validator infrastructure under heavy, real-world conditions. We are sharing it with the community in the hope that it will be a valuable resource for other developers and validator operators.
