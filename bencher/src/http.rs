@@ -203,11 +203,6 @@ where
     /// Asynchronously resolves the HTTP response and applies the extractor function
     /// to parse the response body.
     pub async fn resolve(self) -> BenchResult<Option<V>> {
-        enum Data {
-            Empty,
-            SingleChunk(Bytes),
-            MultiChunk(Vec<u8>),
-        }
         let mut response = self.pending.await?;
         let mut data = Data::Empty;
         while let Some(next) = response.frame().await {
@@ -227,11 +222,26 @@ where
                 }
             }
         }
-        let result = match &data {
-            Data::Empty => return Ok(None),
-            Data::SingleChunk(chunk) => json::get(chunk, ["result"])?,
-            Data::MultiChunk(chunk) => json::get(chunk.as_slice(), ["result"])?,
-        };
+        let result = json::get(data.as_ref(), ["result"]).inspect_err(|_| {
+            tracing::error!("failed to parse response: {}", unsafe {
+                std::str::from_utf8_unchecked(data.as_ref())
+            })
+        })?;
         Ok((self.extractor)(result))
+    }
+}
+enum Data {
+    Empty,
+    SingleChunk(Bytes),
+    MultiChunk(Vec<u8>),
+}
+
+impl AsRef<[u8]> for Data {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Data::Empty => &[],
+            Data::SingleChunk(chunk) => &chunk,
+            Data::MultiChunk(chunk) => &chunk,
+        }
     }
 }

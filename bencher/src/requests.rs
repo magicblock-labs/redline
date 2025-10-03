@@ -52,6 +52,7 @@ pub struct TransactionRequestBuilder {
     signer: Keypair,
     blockhash_provider: BlockHashProvider,
     signature: Option<Signature>,
+    preflight: bool,
 }
 
 impl RequestBuilder for TransactionRequestBuilder {
@@ -62,7 +63,7 @@ impl RequestBuilder for TransactionRequestBuilder {
         let blockhash = self.blockhash_provider.hash();
         let tx = self.provider.generate(id, blockhash, &self.signer);
         self.signature.replace(tx.signatures[0]);
-        Request::new(payload::transaction(&tx, false))
+        Request::new(payload::transaction(&tx, self.preflight))
     }
     fn signature(&self) -> Option<Signature> {
         self.signature
@@ -254,6 +255,7 @@ pub fn make_builder(
             signer,
             blockhash_provider,
             signature: None,
+            preflight: config.benchmark.preflight_check,
         }),
     }
 }
