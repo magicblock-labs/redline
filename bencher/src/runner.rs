@@ -199,11 +199,10 @@ impl BenchRunner {
             .or_insert_with(|| Confirmations::new().0)
             .clone();
 
-        let is_transaction = self.request_builder.signature().is_some();
         let response = con.send(request, extractor);
         drop(con);
         // Subscribe to confirmations if needed.
-        let (account_rx, signature_rx) = self.subscribe_if_needed(id, is_transaction).await;
+        let (account_rx, signature_rx) = self.subscribe_if_needed(id).await;
 
         // Track the delivery of the request.
         delivery.borrow_mut().track(id, None);
@@ -213,8 +212,8 @@ impl BenchRunner {
         let total_sync = self.config.confirmations.enforce_total_sync;
         tokio::task::spawn_local(async move {
             match response.resolve().await {
-                Ok(Some(false)) => tracing::warn!("request failed to be executed"),
-                Err(err) => tracing::error!("request failed to be delivered: {err}"),
+                Ok(Some(false)) => tracing::warn!(id, "request failed to be executed"),
+                Err(_) => tracing::error!(id, "request failed to be delivered"),
                 _ => (),
             }
             // Observe the delivery of the request.
@@ -238,7 +237,6 @@ impl BenchRunner {
     async fn subscribe_if_needed(
         &mut self,
         id: u64,
-        is_transaction: bool,
     ) -> (AccountConfirmationReceiver, SignatureConfirmationReceiver) {
         let total_sync = self.config.confirmations.enforce_total_sync;
         // A macro to conditionally subscribe to a confirmation feed. If total_sync is enabled,
@@ -259,20 +257,19 @@ impl BenchRunner {
             };
         }
 
-        if is_transaction {
-            // If signature subscriptions are enabled, subscribe to the signature of the transaction.
-            if self.config.confirmations.subscribe_to_signatures {
-                if let Some(signature) = self.request_builder.signature() {
-                    let con = self.signatures_websocket.connection();
-                    let tx = self.signature_confirmations.borrow().tx.clone();
-                    let sub = Subscription {
-                        tx,
-                        payload: payload::signature_subscription(signature, id),
-                        oneshot: true,
-                        id,
-                    };
-                    let _ = con.send(sub).await;
-                }
+        // If signature subscriptions are enabled,
+        // subscribe to the signature of the transaction.
+        if self.config.confirmations.subscribe_to_signatures {
+            if let Some(signature) = self.request_builder.signature() {
+                let con = self.signatures_websocket.connection();
+                let tx = self.signature_confirmations.borrow().tx.clone();
+                let sub = Subscription {
+                    tx,
+                    payload: payload::signature_subscription(signature, id),
+                    oneshot: true,
+                    id,
+                };
+                let _ = con.send(sub).await;
             }
 
             let account_rx = maybe_subscribe!(
