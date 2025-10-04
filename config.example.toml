@@ -11,6 +11,12 @@
 # will result in a 10x higher load compared to a parallelism of 1.
 parallelism = 1
 
+# ## ER Authority/Identity
+#
+# The pubkey of the validator (ER) identity, which
+# is used as a target for account delegation
+authority = "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"
+
 # ## Connection Settings
 #
 # Configures the network parameters for connecting to the Solana cluster.

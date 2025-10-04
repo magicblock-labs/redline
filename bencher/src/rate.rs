@@ -55,7 +55,9 @@ impl RateManager {
         self.count += 1;
         if elapsed >= ONESEC {
             self.epoch = Instant::now();
-            self.observations.push(self.count);
+            if self.count > 1 {
+                self.observations.push(self.count);
+            }
             self.count = 0;
         }
         let remaining = (self.rate - self.count).max(1) as u64;

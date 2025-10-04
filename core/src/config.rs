@@ -1,11 +1,14 @@
 use crate::types::{AccountEncoding, AccountSize, BenchMode, BenchResult, ConnectionType, Url};
+use pubkey::Pubkey;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
 use std::path::PathBuf;
 
 /// # Redline Configuration
 ///
 /// This structure holds all the configuration parameters for the Redline benchmark tool.
 /// It is typically loaded from a TOML file.
+#[serde_as]
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -30,6 +33,11 @@ pub struct Config {
     ///
     /// Determines how many concurrent benchmarks to run, each on its own thread.
     pub parallelism: u8,
+    /// ## ER Authority/Identity
+    ///
+    /// Authority/Identity of the validator, used to delegate the accounts
+    #[serde_as(as = "DisplayFromStr")]
+    pub authority: Pubkey,
 }
 
 impl Config {

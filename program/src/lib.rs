@@ -20,9 +20,6 @@ pub const DELEGATION_PROGRAM_ID: Pubkey = sdk::id();
 pub use sdk::delegate_args::DelegateAccountMetas;
 pub use sdk::delegate_args::DelegateAccounts;
 
-/// The seeds for the Program Derived Address (PDA).
-pub const SEEDS: &[u8] = b"bencher-pda";
-
 /// # Process Instruction
 ///
 /// The main entry point for the program, responsible for processing all incoming instructions.
@@ -38,11 +35,16 @@ fn process_instruction(
     let mut iter = accounts.iter();
 
     match instruction {
-        Instruction::InitAccount { space, seed, bump } => {
-            init_account(&mut iter, space, seed, bump)?;
+        Instruction::InitAccount {
+            space,
+            seed,
+            bump,
+            authority,
+        } => {
+            init_account(&mut iter, space, seed, bump, authority)?;
         }
-        Instruction::Delegate { seed } => {
-            delegate_account(accounts, seed)?;
+        Instruction::Delegate { seed, authority } => {
+            delegate_account(accounts, seed, authority)?;
         }
         Instruction::SimpleByteSet { id } => {
             simple_byte_set(&mut iter, id)?;

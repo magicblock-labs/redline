@@ -20,7 +20,7 @@ async fn test_combined_operations() -> Result<(), TransportError> {
     let id = 1_u64;
 
     for seed in 0..17 {
-        let (key, bump) = derive_pda(payer.pubkey(), 128, seed);
+        let (key, bump) = derive_pda(payer.pubkey(), 128, seed, Pubkey::new_unique());
 
         process_transaction(
             &client,
@@ -106,7 +106,15 @@ fn init_account_ix(
     seed: u8,
     bump: u8,
 ) -> SolanaInstruction {
-    let mut instruction = create_instruction(key, Instruction::InitAccount { space, seed, bump });
+    let mut instruction = create_instruction(
+        key,
+        Instruction::InitAccount {
+            space,
+            seed,
+            bump,
+            authority: payer.pubkey(),
+        },
+    );
     instruction
         .accounts
         .insert(0, AccountMeta::new(payer.pubkey(), true));
@@ -117,7 +125,13 @@ fn init_account_ix(
 }
 
 fn delegate_account_ix(payer: &Keypair, key: &Pubkey, seed: u8) -> SolanaInstruction {
-    let mut instruction = create_instruction(key, Instruction::Delegate { seed });
+    let mut instruction = create_instruction(
+        key,
+        Instruction::Delegate {
+            seed,
+            authority: payer.pubkey(),
+        },
+    );
 
     let accounts = DelegateAccounts::new(*key, redline::ID);
     instruction.accounts = DelegateAccountMetas::from(accounts).into_vec(payer.pubkey());
