@@ -161,6 +161,7 @@ impl BenchRunner {
     ///
     /// Starts the benchmark, sending requests at the configured rate.
     pub async fn run(mut self) -> BenchResults {
+        self.rate_manager.reset();
         for i in 0..self.config.benchmark.iterations {
             // This will trigger an account update on the main chain, which in turn
             // will trigger an account clone on the Ephemeral Rollup.
@@ -257,10 +258,12 @@ impl BenchRunner {
             };
         }
 
-        // If signature subscriptions are enabled,
-        // subscribe to the signature of the transaction.
-        if self.config.confirmations.subscribe_to_signatures {
-            if let Some(signature) = self.request_builder.signature() {
+        // for transaction requests, potentially setup extra latency monitoring
+        if let Some(signature) = self.request_builder.signature() {
+            let mut signature_rx = None;
+            // If signature subscriptions are enabled,
+            // subscribe to the signature of the transaction.
+            if self.config.confirmations.subscribe_to_signatures {
                 let con = self.signatures_websocket.connection();
                 let tx = self.signature_confirmations.borrow().tx.clone();
                 let sub = Subscription {
@@ -270,15 +273,15 @@ impl BenchRunner {
                     id,
                 };
                 let _ = con.send(sub).await;
+                signature_rx = maybe_subscribe!(
+                    self.config.confirmations.subscribe_to_signatures,
+                    self.signature_confirmations
+                );
             }
 
             let account_rx = maybe_subscribe!(
                 self.config.confirmations.subscribe_to_accounts,
                 self.account_confirmations
-            );
-            let signature_rx = maybe_subscribe!(
-                self.config.confirmations.subscribe_to_signatures,
-                self.signature_confirmations
             );
             (account_rx, signature_rx)
         } else {

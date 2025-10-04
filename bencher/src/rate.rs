@@ -54,11 +54,8 @@ impl RateManager {
         let elapsed = self.epoch.elapsed();
         self.count += 1;
         if elapsed >= ONESEC {
-            self.epoch = Instant::now();
-            if self.count > 1 {
-                self.observations.push(self.count);
-            }
-            self.count = 0;
+            self.observations.push(self.count);
+            self.reset();
         }
         let remaining = (self.rate - self.count).max(1) as u64;
         let mut lag =
@@ -77,5 +74,11 @@ impl RateManager {
     /// Returns the final statistics for the observed rates.
     pub fn stats(self) -> ObservationsStats {
         ObservationsStats::new(self.observations, true)
+    }
+
+    #[inline]
+    pub fn reset(&mut self) {
+        self.epoch = Instant::now();
+        self.count = 0;
     }
 }
