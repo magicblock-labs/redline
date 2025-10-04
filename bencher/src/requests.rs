@@ -213,7 +213,7 @@ pub fn make_builder(
     let space = config.data.account_size as u32;
     let encoding = config.data.account_encoding;
     let accounts: Vec<Pubkey> = (1..=config.benchmark.accounts_count)
-        .map(|seed| derive_pda(base, space, seed).0)
+        .map(|seed| derive_pda(base, space, seed, config.authority).0)
         .collect();
     match mode {
         BenchMode::GetAccountInfo => Box::new(GetAccountInfoRequestBuilder { accounts, encoding }),

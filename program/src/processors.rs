@@ -1,4 +1,8 @@
-use sdk::{cpi::DelegateAccounts, utils::create_pda};
+use pubkey::Pubkey;
+use sdk::{
+    cpi::{DelegateAccounts, DelegateConfig},
+    utils::create_pda,
+};
 use sha2::{Digest, Sha256};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -6,8 +10,6 @@ use solana_program::{
     msg,
     program_error::ProgramError,
 };
-
-use crate::SEEDS;
 
 /// # Prepare Buffer
 ///
@@ -25,18 +27,24 @@ pub fn init_account(
     space: u32,
     seed: u8,
     bump: u8,
+    authority: Pubkey,
 ) -> ProgramResult {
     let payer = next_account_info(iter)?;
     let pda = next_account_info(iter)?;
-    let mut extra_seeds = space.to_le_bytes().to_vec();
-    extra_seeds.push(seed);
+    let base = next_account_info(iter)?;
+    let mut seeds = space.to_le_bytes().to_vec();
+    seeds.push(seed);
+    seeds.extend_from_slice(&authority.as_ref()[..16]);
+    let seeds = [base.key.as_ref(), &seeds, &[bump]];
+
     create_pda(
         pda,
         &crate::ID,
         space as usize,
-        &[&[payer.key.as_ref(), SEEDS, &extra_seeds, &[bump]]],
+        &[&seeds],
         next_account_info(iter)?,
         payer,
+        true,
     )?;
     msg!("initialized PDA: {}", pda.key);
     Ok(())
@@ -45,14 +53,22 @@ pub fn init_account(
 /// # Delegate Account
 ///
 /// Delegates a PDA to the Ephemeral Rollup (ER) program.
-pub fn delegate_account(accounts: &[AccountInfo], seed: u8) -> ProgramResult {
-    let accounts = DelegateAccounts::try_from(accounts)?;
-    let mut extra_seeds = (accounts.pda.data_len() as u32).to_le_bytes().to_vec();
-    extra_seeds.push(seed);
-    let seeds = [accounts.payer.key.as_ref(), SEEDS, &extra_seeds];
+pub fn delegate_account(accs: &[AccountInfo], seed: u8, authority: Pubkey) -> ProgramResult {
+    let accounts = DelegateAccounts::try_from(accs)?;
+    let base = accs
+        .last()
+        .ok_or_else(|| ProgramError::NotEnoughAccountKeys)?;
+    let mut seeds = (accounts.pda.data_len() as u32).to_le_bytes().to_vec();
+    seeds.push(seed);
+    seeds.extend_from_slice(&authority.as_ref()[..16]);
+    let seeds = [base.key.as_ref(), &seeds];
     let pda = *accounts.pda.key;
-    sdk::cpi::delegate_account(accounts, &seeds, Default::default())?;
-    msg!("delegated PDA: {}", pda);
+    let config = DelegateConfig {
+        commit_frequency_ms: u32::MAX,
+        validator: Some(authority),
+    };
+    sdk::cpi::delegate_account(accounts, &seeds, config)?;
+    msg!("delegated PDA: {} to {}", pda, authority);
     Ok(())
 }
 

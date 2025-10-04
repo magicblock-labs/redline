@@ -15,12 +15,17 @@ pub enum Instruction {
     /// ## Initialize Account
     ///
     /// Initializes a new Program Derived Address (PDA) with a specified size and seed.
-    InitAccount { space: u32, seed: u8, bump: u8 },
+    InitAccount {
+        space: u32,
+        seed: u8,
+        bump: u8,
+        authority: Pubkey,
+    },
     /// ## Delegate Account
     ///
     /// Delegates a PDA to the Ephemeral Rollup (ER) program, allowing it to be used
     /// in ER-specific operations.
-    Delegate { seed: u8 },
+    Delegate { seed: u8, authority: Pubkey },
     /// ## Simple Byte Set
     ///
     /// Fills an account's data with a simple, repeating byte pattern. This is useful for

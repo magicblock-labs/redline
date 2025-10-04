@@ -73,7 +73,7 @@ impl ProgressBar {
             spin_idx += 1;
 
             // Refresh the bar every 200ms for a smooth animation
-            std::thread::sleep(Duration::from_millis(200));
+            std::thread::sleep(Duration::from_millis(100));
         }
     }
 }

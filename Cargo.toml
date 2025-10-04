@@ -40,4 +40,4 @@ features = ["bincode"]
 # version = "0.2.4"
 package = "ephemeral-rollups-sdk"
 git = "https://github.com/magicblock-labs/ephemeral-rollups-sdk.git"
-rev = "99db0fe"
+rev = "b7d76dfb6"
