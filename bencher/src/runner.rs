@@ -25,7 +25,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, time::timeout};
 
 /// # Bench Runner
 ///
@@ -211,6 +211,7 @@ impl BenchRunner {
         // Spawn a new task to handle the response and confirmations.
         let shutdown = self.shutdown.clone();
         let total_sync = self.config.confirmations.enforce_total_sync;
+        let account_confirmations = self.account_confirmations.clone();
         tokio::task::spawn_local(async move {
             match response.resolve().await {
                 Ok(Some(false)) => tracing::warn!(id, "request failed to be executed"),
@@ -225,7 +226,9 @@ impl BenchRunner {
             }
             // Wait for the account update confirmation, if subscribed.
             if let Some(rx) = account_rx {
-                let _ = rx.await;
+                if timeout(Duration::from_secs(3), rx).await.is_err() {
+                    account_confirmations.borrow_mut().remove(id);
+                };
             }
             // Wait for the signature confirmation, if subscribed.
             if let Some(rx) = signature_rx {

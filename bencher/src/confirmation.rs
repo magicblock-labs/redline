@@ -132,6 +132,13 @@ impl<V> Confirmations<V> {
         self.pending.insert(id, pending);
     }
 
+    /// # Remove pending event
+    ///
+    /// Useful to cleanup events that failed to be confirmed
+    pub fn remove(&mut self, id: u64) {
+        self.pending.remove(&id);
+    }
+
     /// # Observe Confirmation
     ///
     /// Records a received confirmation, calculating the latency and sending a notification if requested.

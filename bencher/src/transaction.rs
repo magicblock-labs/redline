@@ -91,7 +91,7 @@ pub struct CommitProvider {
 pub struct MixedProvider {
     providers: Vec<Box<dyn TransactionProvider>>,
     rng: ThreadRng,
-    distribution: WeightedIndex<u8>,
+    distribution: WeightedIndex<u16>,
     last_name: &'static str,
 }
 

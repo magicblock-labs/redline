@@ -8,6 +8,7 @@ use program::utils::derive_pda;
 use pubkey::Pubkey;
 use signature::Signature;
 use signer::Signer;
+use std::collections::HashSet;
 
 use crate::{
     blockhash::BlockHashProvider,
@@ -168,7 +169,7 @@ impl RequestBuilder for GetTokenAccountBalanceRequestBuilder {
 /// A request builder that combines multiple request builders to generate a mixed workload.
 pub struct MixedRequestBuilder {
     providers: Vec<Box<dyn RequestBuilder>>,
-    distribution: WeightedIndex<u8>,
+    distribution: WeightedIndex<u16>,
     rng: ThreadRng,
     last_name: &'static str,
     last_index: usize,
@@ -190,9 +191,11 @@ impl RequestBuilder for MixedRequestBuilder {
     }
     fn accounts(&self) -> Vec<Pubkey> {
         self.providers
-            .first()
-            .map(|p| p.accounts())
-            .unwrap_or_default()
+            .iter()
+            .flat_map(|p| p.accounts())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect()
     }
     fn extractor(&self) -> fn(json::LazyValue) -> Option<bool> {
         self.providers

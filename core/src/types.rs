@@ -48,7 +48,7 @@ pub struct WeightedBenchMode {
     /// The benchmark mode to be executed.
     pub mode: BenchMode,
     /// The weight assigned to this mode, determining its frequency in the benchmark.
-    pub weight: u8,
+    pub weight: u16,
 }
 
 /// Defines the type of HTTP connection to use for the benchmark.
