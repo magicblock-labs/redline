@@ -138,7 +138,7 @@ impl BenchRunner {
         }
         // The vault is a pre-funded account that is used to trigger account cloning.
         let vault =
-            Keypair::read_from_file("keypairs/vault.json").expect("failed to read vault keypair");
+            Keypair::read_from_file(config.keypairs.join("vault.json")).expect("failed to read vault keypair");
         let transfer_manager =
             TransferManager::new(&config, vault, &accounts, blockhash_provider).await;
 
