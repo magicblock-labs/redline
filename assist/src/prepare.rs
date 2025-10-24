@@ -1,4 +1,4 @@
-use core::{config::Config, consts::KEYPAIRS_PATH, types::BenchResult};
+use core::{config::Config, types::BenchResult};
 use std::{
     cell::RefCell, collections::HashSet, fs, hash::Hash, ops::AddAssign, path::PathBuf, rc::Rc,
 };
@@ -31,9 +31,9 @@ const FIVE_SOL: u64 = 1_000_000_000 * 5;
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
     tracing::info!("using config file at {path:?} to prepare the benchmark");
     let config = Config::from_path(path)?;
+    Preparator::generate_keypairs(&config)?;
     let preparator = Preparator::new(&config).await?;
 
-    preparator.generate_keypairs()?;
     preparator.fund_accounts().await?;
     preparator.initialize_pdas().await?;
 
@@ -56,11 +56,12 @@ impl Preparator {
     /// Creates a new `Preparator` instance, loading the necessary keypairs and establishing
     /// a connection to the Solana cluster.
     async fn new(config: &Config) -> BenchResult<Rc<Self>> {
+        let keypath = &config.keypairs;
         let keypairs: Vec<_> = (1..=config.parallelism)
-            .map(|n| Keypair::read_from_file(format!("{KEYPAIRS_PATH}/{n}.json")))
+            .map(|n| Keypair::read_from_file(keypath.join(format!("{n}.json"))))
             .collect::<BenchResult<_>>()
             .inspect_err(|e| tracing::error!("failed to read keypairs for bench: {e}"))?;
-        let vault = Keypair::read_from_file(format!("{KEYPAIRS_PATH}/vault.json"))
+        let vault = Keypair::read_from_file(keypath.join(format!("vault.json")))
             .inspect_err(|e| tracing::error!("failed to read keypair for vault: {e}"))?;
         let client = Rc::new(RpcClient::new_with_commitment(
             config.connection.chain_url.0.to_string(),
@@ -70,7 +71,7 @@ impl Preparator {
         let pk = &vault.pubkey();
         let lamports = client.get_balance(pk).await?;
         if lamports < FIVE_SOL / 2 {
-            tracing::info!("Airdropping SOLs to vault");
+            tracing::info!("Airdropping {FIVE_SOL} SOL to vault");
             client.request_airdrop(pk, FIVE_SOL).await?;
         }
 
@@ -86,19 +87,20 @@ impl Preparator {
     /// # Generate Keypairs
     ///
     /// Generates the necessary keypairs for the benchmark if they do not already exist.
-    fn generate_keypairs(&self) -> BenchResult<()> {
-        if !fs::exists(KEYPAIRS_PATH)? {
+    fn generate_keypairs(config: &Config) -> BenchResult<()> {
+        let keypath = &config.keypairs;
+        if !fs::exists(keypath)? {
             tracing::info!("Generating benchmark keypairs");
-            fs::create_dir(KEYPAIRS_PATH)?;
+            fs::create_dir(keypath)?;
         }
-        for n in 1..=self.config.parallelism {
-            let path = format!("{KEYPAIRS_PATH}/{n}.json");
+        for n in 1..=config.parallelism {
+            let path = keypath.join(format!("{n}.json"));
             if fs::exists(&path)? {
                 continue;
             }
             Keypair::new().write_to_file(path)?;
         }
-        let vault = format!("{KEYPAIRS_PATH}/vault.json");
+        let vault = keypath.join(format!("vault.json"));
         if !fs::exists(&vault)? {
             Keypair::new().write_to_file(vault)?;
         }

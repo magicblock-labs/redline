@@ -11,6 +11,11 @@
 # will result in a 10x higher load compared to a parallelism of 1.
 parallelism = 1
 
+# ## Path to keypairs
+#
+# Directory where vault and signer keypairs are stored
+keypairs = "keypairs/"
+
 # ## ER Authority/Identity
 #
 # The pubkey of the validator (ER) identity, which

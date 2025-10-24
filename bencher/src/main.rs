@@ -30,7 +30,7 @@ fn main() -> BenchResult<()> {
     // Load the configuration from command-line arguments
     let config = Config::from_args()?;
     let keypairs: Vec<_> = (1..=config.parallelism)
-        .map(|n| Keypair::read_from_file(format!("keypairs/{n}.json")))
+        .map(|n| Keypair::read_from_file(config.keypairs.join(format!("{n}.json"))))
         .collect::<BenchResult<_>>()?;
 
     let mut handles = Vec::new();

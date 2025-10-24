@@ -33,6 +33,10 @@ pub struct Config {
     ///
     /// Determines how many concurrent benchmarks to run, each on its own thread.
     pub parallelism: u8,
+    /// ## Keypairs path
+    ///
+    /// Path to keypairs directory where vault and signer keypairs are stored
+    pub keypairs: PathBuf,
     /// ## ER Authority/Identity
     ///
     /// Authority/Identity of the validator, used to delegate the accounts

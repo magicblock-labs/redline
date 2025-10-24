@@ -2,6 +2,7 @@ use redline::utils::derive_pda;
 use redline::{instruction::Instruction, DELEGATION_PROGRAM_ID};
 use sdk::delegate_args::{DelegateAccountMetas, DelegateAccounts};
 use solana_program_test::*;
+#[allow(deprecated)]
 use solana_sdk::{
     account::Account,
     instruction::{AccountMeta, Instruction as SolanaInstruction},

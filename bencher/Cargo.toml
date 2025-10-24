@@ -20,10 +20,10 @@ fastwebsockets = { version = "0.10", features = ["upgrade", "unstable-split"] }
 transaction = { workspace = true }
 pubkey = { workspace = true }
 keypair = { workspace = true }
-signature = { package = "solana-signature", version = "2.2" }
+signature = { package = "solana-signature", version = "2" }
 signer = { workspace = true }
 instruction = { workspace = true }
-hash = { package = "solana-hash", version = "2.2" }
+hash = { package = "solana-hash", version = "2" }
 systransaction = { workspace = true }
 
 program = { path = "../program", package = "redline-program" }
