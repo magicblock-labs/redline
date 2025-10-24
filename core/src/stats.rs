@@ -1,5 +1,5 @@
 use json::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 /// # Benchmark Statistics
 ///
@@ -114,17 +114,17 @@ impl ObservationsStats {
     /// # New Observation Statistics
     ///
     /// Creates a new `ObservationsStats` instance from a vector of observations.
-    pub fn new(mut observations: Vec<u32>, invertedq: bool) -> Self {
+    pub fn new(mut observations: VecDeque<u32>, invertedq: bool) -> Self {
         if observations.is_empty() {
             return Self::default();
         }
-        observations.sort();
+        observations.make_contiguous().sort();
         let count = observations.len();
         let sum: u64 = observations.iter().map(|&x| x as u64).sum();
         let avg = (sum / count as u64) as i32;
         let median = observations[count / 2] as i32;
-        let min = *observations.first().unwrap();
-        let max = *observations.last().unwrap();
+        let min = *observations.front().unwrap();
+        let max = *observations.back().unwrap();
         let q95 = (count as f64 * 0.95).ceil() as usize;
         let qindex = if invertedq {
             count.saturating_sub(q95 + 1)

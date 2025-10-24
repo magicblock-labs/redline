@@ -1,7 +1,12 @@
 // bencher/src/confirmation.rs
 
 use core::stats::ObservationsStats;
-use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    rc::Rc,
+    time::Instant,
+};
 
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -25,7 +30,7 @@ pub struct Confirmations<V> {
     /// A map of pending confirmations, with the key being the request ID.
     pending: HashMap<u64, PendingConfirmation<V>>,
     /// A vector of observed latencies, in microseconds.
-    observations: Vec<u32>,
+    observations: VecDeque<u32>,
     /// The sender part of the confirmation channel.
     pub tx: ConfirmationSender<V>,
 }
@@ -105,7 +110,7 @@ impl<V> Confirmations<V> {
         let (tx, rx) = mpsc::channel(1024);
         let confirmations = Confirmations {
             pending: HashMap::new(),
-            observations: Vec::new(),
+            observations: VecDeque::new(),
             tx,
         };
         (Rc::new(confirmations.into()), rx)
@@ -136,11 +141,15 @@ impl<V> Confirmations<V> {
     /// * `id` - The unique identifier for the request.
     /// * `v` - The value associated with the confirmation.
     pub fn observe(&mut self, id: u64, v: V) {
+        const MAX_OBSERVATIONS: usize = 2 << 21; // ~4 million
         let Some(pending) = self.pending.remove(&id) else {
             return;
         };
         let took = pending.start.elapsed().as_micros() as u32;
-        self.observations.push(took);
+        if self.observations.len() > MAX_OBSERVATIONS {
+            self.observations.pop_front();
+        }
+        self.observations.push_back(took);
         if let Some(tx) = pending.tx {
             let _ = tx.send(v);
         }

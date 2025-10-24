@@ -1,5 +1,6 @@
 use core::stats::ObservationsStats;
 use std::{
+    collections::VecDeque,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -23,7 +24,7 @@ pub struct RateManager {
     /// A semaphore to control concurrency and prevent overwhelming the validator.
     permits: Arc<Semaphore>,
     /// A collection of observed rates per second.
-    observations: Vec<u32>,
+    observations: VecDeque<u32>,
 }
 
 impl RateManager {
@@ -42,7 +43,7 @@ impl RateManager {
             permits,
             count: 0,
             epoch: Instant::now(),
-            observations: Vec::new(),
+            observations: VecDeque::new(),
         }
     }
 
@@ -54,7 +55,7 @@ impl RateManager {
         let elapsed = self.epoch.elapsed();
         self.count += 1;
         if elapsed >= ONESEC {
-            self.observations.push(self.count);
+            self.observations.push_back(self.count);
             self.reset();
         }
         let remaining = (self.rate - self.count).max(1) as u64;
