@@ -4,6 +4,7 @@ use std::{
 };
 
 use commitment::CommitmentConfig;
+use decoder_types::UiAccountEncoding;
 use dlp::{args::DelegateArgs, instruction_builder::delegate};
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
@@ -13,6 +14,7 @@ use program::{
 };
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
+use rpc_types::config::RpcAccountInfoConfig;
 use signer::{EncodableKey, Signer};
 use solana_system_interface::instruction as sysinstruction;
 use tokio::task::LocalSet;
@@ -146,7 +148,13 @@ impl Preparator {
             let fut = async move {
                 let response = this
                     .client
-                    .get_account_with_config(&pda.pubkey, Default::default())
+                    .get_account_with_config(
+                        &pda.pubkey,
+                        RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64Zstd),
+                            ..Default::default()
+                        },
+                    )
                     .await
                     .inspect_err(|err| tracing::error!(%err, "failed to fetch PDA state"))?
                     .value;

@@ -12,6 +12,8 @@ keywords.workspace = true
 
 [dependencies]
 rpc = { package = "solana-rpc-client", version = "2.2" }
+rpc-types = { package = "solana-rpc-client-types", version = "2.2" }
+decoder-types = { package = "solana-account-decoder-client-types", version = "2.2" }
 commitment = { package = "solana-commitment-config", version = "2.2" }
 keypair = { workspace = true }
 signer = { workspace = true }
