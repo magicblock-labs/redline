@@ -63,15 +63,18 @@ impl BenchStatistics {
 
         let request_stats = request_stats
             .into_iter()
-            .map(|(key, value)| (key, ObservationsStats::merge(value)))
+            .map(|(key, value)| (key, ObservationsStats::merge(value, true)))
             .collect();
 
         Self {
             configuration,
-            account_update_latency: ObservationsStats::merge(account_update_stats),
-            signature_confirmation_latency: ObservationsStats::merge(signature_confirmation_stats),
+            account_update_latency: ObservationsStats::merge(account_update_stats, true),
+            signature_confirmation_latency: ObservationsStats::merge(
+                signature_confirmation_stats,
+                true,
+            ),
             request_stats,
-            rps: ObservationsStats::merge(rps),
+            rps: ObservationsStats::merge(rps, false),
         }
     }
 }
@@ -80,8 +83,8 @@ impl ObservationsStats {
     /// # Merge Observation Statistics
     ///
     /// Merges a vector of `ObservationsStats` into a single, consolidated report.
-    pub fn merge(stats: Vec<ObservationsStats>) -> Self {
-        let total_count = stats.len();
+    pub fn merge(stats: Vec<ObservationsStats>, average: bool) -> Self {
+        let total_count = if average { stats.len() } else { 1 };
         if total_count == 0 {
             return Self::default();
         }
@@ -91,8 +94,16 @@ impl ObservationsStats {
                 (
                     acc.0 + stat.count,
                     acc.1 + stat.median,
-                    acc.2.min(stat.min),
-                    acc.3.max(stat.max),
+                    if average {
+                        acc.2.min(stat.min)
+                    } else {
+                        acc.2 + stat.min
+                    },
+                    if average {
+                        acc.3.max(stat.max)
+                    } else {
+                        acc.3 + stat.max
+                    },
                     acc.4 + stat.avg,
                     acc.5 + stat.quantile95,
                     acc.6 + stat.stddev,
