@@ -29,7 +29,7 @@ fn main() -> BenchResult<()> {
 
     // Load the configuration from command-line arguments
     let config = Config::from_args()?;
-    let keypairs: Vec<_> = (1..=config.parallelism)
+    let keypairs: Vec<_> = (1..=config.payers * config.parallelism)
         .map(|n| Keypair::read_from_file(config.keypairs.join(format!("{n}.json"))))
         .collect::<BenchResult<_>>()?;
 
@@ -38,13 +38,14 @@ fn main() -> BenchResult<()> {
     let progress = Arc::new(AtomicU64::new(0));
     // Create and start the progress bar.
     let progress_bar = ProgressBar::new(
-        config.benchmark.iterations * keypairs.len() as u64,
+        config.benchmark.iterations * config.parallelism as u64,
         progress.clone(),
     );
     let bar = thread::spawn(move || progress_bar.start());
 
     // Spawn a new thread for each keypair, up to the specified parallelism
-    for kp in keypairs {
+    for kp in keypairs.chunks(config.payers as usize) {
+        let signers = kp.iter().map(|k| k.insecure_clone()).collect();
         let cfg = config.clone();
         let progress = progress.clone();
         let handle = thread::spawn(move || {
@@ -54,7 +55,7 @@ fn main() -> BenchResult<()> {
                 .unwrap();
             let local = LocalSet::new();
             let bencher = local
-                .block_on(&rt, BenchRunner::new(kp, cfg, progress))
+                .block_on(&rt, BenchRunner::new(signers, cfg, progress))
                 .expect("failed to create bencher");
             let task = local.run_until(bencher.run());
             let results = rt.block_on(task);

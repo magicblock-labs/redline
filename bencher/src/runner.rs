@@ -65,7 +65,7 @@ impl BenchRunner {
     ///
     /// Creates a new `BenchRunner` instance, initializing all the necessary components.
     pub async fn new(
-        signer: Keypair,
+        signers: Vec<Keypair>,
         config: Config,
         progress: Arc<AtomicU64>,
     ) -> BenchResult<Self> {
@@ -107,7 +107,7 @@ impl BenchRunner {
         let request_builder = make_builder(
             &config.benchmark.mode,
             &config,
-            signer,
+            signers,
             blockhash_provider.clone(),
         );
 
@@ -137,8 +137,8 @@ impl BenchRunner {
             tokio::time::sleep(Duration::from_secs(1)).await
         }
         // The vault is a pre-funded account that is used to trigger account cloning.
-        let vault =
-            Keypair::read_from_file(config.keypairs.join("vault.json")).expect("failed to read vault keypair");
+        let vault = Keypair::read_from_file(config.keypairs.join("vault.json"))
+            .expect("failed to read vault keypair");
         let transfer_manager =
             TransferManager::new(&config, vault, &accounts, blockhash_provider).await;
 
@@ -232,7 +232,7 @@ impl BenchRunner {
             }
             // Wait for the signature confirmation, if subscribed.
             if let Some(rx) = signature_rx {
-                let _ = rx.await;
+                let _ = timeout(Duration::from_secs(3), rx).await;
             }
             drop(shutdown);
         });

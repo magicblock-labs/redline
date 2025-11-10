@@ -57,7 +57,7 @@ impl Preparator {
     /// a connection to the Solana cluster.
     async fn new(config: &Config) -> BenchResult<Rc<Self>> {
         let keypath = &config.keypairs;
-        let keypairs: Vec<_> = (1..=config.parallelism)
+        let keypairs: Vec<_> = (1..=config.payers * config.parallelism)
             .map(|n| Keypair::read_from_file(keypath.join(format!("{n}.json"))))
             .collect::<BenchResult<_>>()
             .inspect_err(|e| tracing::error!("failed to read keypairs for bench: {e}"))?;
@@ -93,7 +93,7 @@ impl Preparator {
             tracing::info!("Generating benchmark keypairs");
             fs::create_dir(keypath)?;
         }
-        for n in 1..=config.parallelism {
+        for n in 1..=config.parallelism * config.payers {
             let path = keypath.join(format!("{n}.json"));
             if fs::exists(&path)? {
                 continue;
@@ -258,7 +258,7 @@ impl Preparator {
     fn derive_pdas(&self, count: u8, space: u32) -> HashSet<Pda> {
         let mut accounts = HashSet::new();
         let authority = self.config.authority;
-        for kp in &self.keypairs {
+        for kp in self.keypairs.iter().step_by(self.config.payers as usize) {
             for seed in 1..=count {
                 let (pubkey, bump) = derive_pda(kp.pubkey(), space, seed, authority);
                 accounts.insert(Pda {

@@ -4,10 +4,7 @@ use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
 use program::instruction::Instruction;
 use pubkey::Pubkey;
-use rand::{
-    distributions::WeightedIndex, prelude::Distribution, rngs::ThreadRng, seq::SliceRandom,
-    thread_rng,
-};
+use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng};
 use sdk::consts::{MAGIC_CONTEXT_ID, MAGIC_PROGRAM_ID};
 use signer::Signer;
 use transaction::Transaction;
@@ -82,17 +79,6 @@ pub struct CommitProvider {
     rng: ThreadRng,
     count: usize,
     payer: Pubkey,
-}
-
-/// # Mixed Provider
-///
-/// A transaction provider that combines multiple transaction providers to generate a mixed workload.
-/// The distribution of transactions is determined by the weights assigned to each provider.
-pub struct MixedProvider {
-    providers: Vec<Box<dyn TransactionProvider>>,
-    rng: ThreadRng,
-    distribution: WeightedIndex<u16>,
-    last_name: &'static str,
 }
 
 impl TransactionProvider for SimpleByteSetProvider {
@@ -198,26 +184,6 @@ impl TransactionProvider for CommitProvider {
     }
 }
 
-impl TransactionProvider for MixedProvider {
-    fn name(&self) -> &'static str {
-        self.last_name
-    }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
-        // Selects a provider based on the weighted distribution.
-        let index = self.distribution.sample(&mut self.rng);
-        let generator = &mut self.providers[index];
-        self.last_name = generator.name();
-        generator.generate_ix(id)
-    }
-
-    fn accounts(&self) -> Vec<Pubkey> {
-        self.providers
-            .first()
-            .map(|tp| tp.accounts())
-            .unwrap_or_default()
-    }
-}
-
 /// # Make Provider
 ///
 /// A factory function that creates a transaction provider based on the provided benchmark mode.
@@ -227,21 +193,6 @@ pub fn make_provider(
     accounts: Vec<Pubkey>,
 ) -> Box<dyn TransactionProvider> {
     match mode {
-        BenchMode::Mixed(modes) => {
-            let providers = modes
-                .iter()
-                .map(|m| make_provider(&m.mode, base, accounts.clone()))
-                .collect::<Vec<_>>();
-            let weights = modes.iter().map(|m| m.weight).collect::<Vec<_>>();
-            let distribution = WeightedIndex::new(weights).unwrap();
-            let rng = thread_rng();
-            Box::new(MixedProvider {
-                providers,
-                distribution,
-                rng,
-                last_name: "Mixed",
-            })
-        }
         BenchMode::SimpleByteSet => Box::new(SimpleByteSetProvider { accounts }),
         BenchMode::ReadWrite => Box::new(ReadWriteProvider {
             accounts,

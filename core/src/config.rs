@@ -33,6 +33,10 @@ pub struct Config {
     ///
     /// Determines how many concurrent benchmarks to run, each on its own thread.
     pub parallelism: u8,
+    /// ## Payers/Signers
+    ///
+    /// Indicates the number of different payers/signers to use when sending transactions.
+    pub payers: u8,
     /// ## Keypairs path
     ///
     /// Path to keypairs directory where vault and signer keypairs are stored

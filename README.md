@@ -91,6 +91,12 @@ REDLINE uses a TOML file for configuration. Here's an overview of the available 
 # The number of parallel threads to run the benchmark on.
 parallelism = 1
 
+# Number of payers/transaction signers
+payers = 8
+
+# Path to keypairs
+keypairs = "keypairs/"
+
 # The pubkey of the validator (ER) identity, which
 # is used as a target for account delegation
 authority = "mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev"

@@ -16,7 +16,10 @@ use crate::{
     payload,
     transaction::TransactionProvider,
 };
-use rand::{distributions::WeightedIndex, prelude::Distribution, rngs::ThreadRng, thread_rng};
+use rand::{
+    distributions::WeightedIndex, prelude::Distribution, rngs::ThreadRng, seq::SliceRandom,
+    thread_rng,
+};
 
 /// # Request Builder Trait
 ///
@@ -50,10 +53,11 @@ pub trait RequestBuilder {
 /// A request builder that generates transaction-based requests.
 pub struct TransactionRequestBuilder {
     provider: Box<dyn TransactionProvider>,
-    signer: Keypair,
+    signers: Vec<Keypair>,
     blockhash_provider: BlockHashProvider,
     signature: Option<Signature>,
     preflight: bool,
+    rng: ThreadRng,
 }
 
 impl RequestBuilder for TransactionRequestBuilder {
@@ -62,7 +66,11 @@ impl RequestBuilder for TransactionRequestBuilder {
     }
     fn build(&mut self, id: u64) -> Request<String> {
         let blockhash = self.blockhash_provider.hash();
-        let tx = self.provider.generate(id, blockhash, &self.signer);
+        let signer = self
+            .signers
+            .choose(&mut self.rng)
+            .expect("should have at least one signer");
+        let tx = self.provider.generate(id, blockhash, signer);
         self.signature.replace(tx.signatures[0]);
         Request::new(payload::transaction(&tx, self.preflight))
     }
@@ -209,10 +217,13 @@ impl RequestBuilder for MixedRequestBuilder {
 pub fn make_builder(
     mode: &BenchMode,
     config: &Config,
-    signer: Keypair,
+    signers: Vec<Keypair>,
     blockhash_provider: BlockHashProvider,
 ) -> Box<dyn RequestBuilder> {
-    let base = signer.pubkey();
+    let base = signers
+        .first()
+        .expect("should have at least 1 payer")
+        .pubkey();
     let space = config.data.account_size as u32;
     let encoding = config.data.account_encoding;
     let accounts: Vec<Pubkey> = (1..=config.benchmark.accounts_count)
@@ -231,15 +242,9 @@ pub fn make_builder(
             let (providers, weights): (Vec<_>, Vec<_>) = modes
                 .iter()
                 .map(|m| {
-                    (
-                        make_builder(
-                            &m.mode,
-                            config,
-                            signer.insecure_clone(),
-                            blockhash_provider.clone(),
-                        ),
-                        m.weight,
-                    )
+                    let signers = signers.iter().map(|k| k.insecure_clone()).collect();
+                    let blockhash = blockhash_provider.clone();
+                    (make_builder(&m.mode, config, signers, blockhash), m.weight)
                 })
                 .unzip();
             let distribution = WeightedIndex::new(weights).unwrap();
@@ -255,10 +260,11 @@ pub fn make_builder(
         // Handle TPS modes by creating a TransactionRequestBuilder
         mode => Box::new(TransactionRequestBuilder {
             provider: crate::transaction::make_provider(mode, base, accounts),
-            signer,
+            signers,
             blockhash_provider,
             signature: None,
             preflight: config.benchmark.preflight_check,
+            rng: thread_rng(),
         }),
     }
 }

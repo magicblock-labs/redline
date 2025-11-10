@@ -11,6 +11,14 @@
 # will result in a 10x higher load compared to a parallelism of 1.
 parallelism = 1
 
+# ## Number of payers/transaction signers
+#
+# This is used to make transactions completely independent of each other
+# by providing a different account as the payer/signer for it. This allows
+# to benchmark low contention scenarios, when transactions can execute in
+# parallel due to disjoint set of accounts they operate on.
+payers = 8
+
 # ## Path to keypairs
 #
 # Directory where vault and signer keypairs are stored
