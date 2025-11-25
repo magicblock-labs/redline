@@ -259,7 +259,7 @@ pub fn make_builder(
         }
         // Handle TPS modes by creating a TransactionRequestBuilder
         mode => Box::new(TransactionRequestBuilder {
-            provider: crate::transaction::make_provider(mode, base, accounts),
+            provider: crate::transaction::make_provider(mode, accounts),
             signers,
             blockhash_provider,
             signature: None,

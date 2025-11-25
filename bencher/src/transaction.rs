@@ -78,7 +78,6 @@ pub struct CommitProvider {
     accounts: Vec<Pubkey>,
     rng: ThreadRng,
     count: usize,
-    payer: Pubkey,
 }
 
 impl TransactionProvider for SimpleByteSetProvider {
@@ -165,7 +164,6 @@ impl TransactionProvider for CommitProvider {
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::CommitAccounts { id };
         let mut accounts = vec![
-            AccountMeta::new(self.payer, true),
             AccountMeta::new(MAGIC_CONTEXT_ID, false),
             AccountMeta::new_readonly(MAGIC_PROGRAM_ID, false),
         ];
@@ -187,11 +185,7 @@ impl TransactionProvider for CommitProvider {
 /// # Make Provider
 ///
 /// A factory function that creates a transaction provider based on the provided benchmark mode.
-pub fn make_provider(
-    mode: &BenchMode,
-    base: Pubkey,
-    accounts: Vec<Pubkey>,
-) -> Box<dyn TransactionProvider> {
+pub fn make_provider(mode: &BenchMode, accounts: Vec<Pubkey>) -> Box<dyn TransactionProvider> {
     match mode {
         BenchMode::SimpleByteSet => Box::new(SimpleByteSetProvider { accounts }),
         BenchMode::ReadWrite => Box::new(ReadWriteProvider {
@@ -215,7 +209,6 @@ pub fn make_provider(
             accounts,
             count: *accounts_per_transaction as usize,
             rng: thread_rng(),
-            payer: base,
         }),
         // This function is only for transaction-based modes, so it will panic
         // if an RPC-based mode is provided.
