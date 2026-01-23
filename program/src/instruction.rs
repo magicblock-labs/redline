@@ -51,4 +51,9 @@ pub enum Instruction {
     /// Reads the data from a list of accounts and logs their sizes, useful for testing
     /// read-only account performance.
     ReadAccountsData { id: u64 },
+    /// ## Close Account
+    ///
+    /// Closes an account and refunds the rent to the original payer.
+    /// Only the original payer (stored in first 32 bytes) can close the account.
+    CloseAccount,
 }

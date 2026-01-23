@@ -38,19 +38,23 @@ pub trait TransactionProvider {
 
 /// # SimpleByteSet Provider
 ///
-/// Generates simple transactions that write a small set of bytes to an account.
+/// Generates simple transactions that write a small set of bytes to multiple accounts.
 /// This is useful for basic throughput testing.
 pub struct SimpleByteSetProvider {
     accounts: Vec<Pubkey>,
+    accounts_per_transaction: usize,
+    rng: ThreadRng,
 }
 
 /// # HighCuCost Provider
 ///
 /// Generates transactions with a high computational cost to stress the validator's
-/// processing capabilities.
+/// processing capabilities, writing results to multiple accounts.
 pub struct HighCuCostProvider {
     accounts: Vec<Pubkey>,
     iters: u32,
+    accounts_per_transaction: usize,
+    rng: ThreadRng,
 }
 
 /// # ReadWrite Provider
@@ -59,6 +63,7 @@ pub struct HighCuCostProvider {
 /// which is useful for testing lock contention.
 pub struct ReadWriteProvider {
     accounts: Vec<Pubkey>,
+    accounts_per_transaction: usize,
     rng: ThreadRng,
 }
 
@@ -86,10 +91,12 @@ impl TransactionProvider for SimpleByteSetProvider {
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::SimpleByteSet { id };
-        // The PDA is selected based on the request ID, which ensures that the
-        // transactions are distributed across all available accounts.
-        let pda = self.accounts[id as usize % self.accounts.len()];
-        let accounts = vec![AccountMeta::new(pda, false)];
+        // Randomly select accounts for this transaction
+        let selected = self
+            .accounts
+            .choose_multiple(&mut self.rng, self.accounts_per_transaction)
+            .copied();
+        let accounts = selected.map(|pda| AccountMeta::new(pda, false)).collect();
         self.wrap_ix(ix, accounts)
     }
     fn accounts(&self) -> Vec<Pubkey> {
@@ -102,13 +109,19 @@ impl TransactionProvider for HighCuCostProvider {
         "HighCuCost"
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
-        let init = self.accounts[id as usize % self.accounts.len()];
+        // Use first account as init parameter
+        let init = self.accounts[0];
         let ix = Instruction::ExpensiveHashCompute {
             id,
             init,
             iters: self.iters,
         };
-        let accounts = vec![AccountMeta::new(init, false)];
+        // Randomly select accounts for this transaction
+        let selected = self
+            .accounts
+            .choose_multiple(&mut self.rng, self.accounts_per_transaction)
+            .copied();
+        let accounts = selected.map(|pda| AccountMeta::new(pda, false)).collect();
         self.wrap_ix(ix, accounts)
     }
 
@@ -122,12 +135,27 @@ impl TransactionProvider for ReadWriteProvider {
         "ReadWrite"
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
-        // Randomly selects two accounts for the read-write operation.
-        let mut accounts = self.accounts.choose_multiple(&mut self.rng, 2).copied();
         let ix = Instruction::AccountDataCopy { id };
-        let ro = AccountMeta::new_readonly(accounts.next().unwrap(), false);
-        let rw = AccountMeta::new(accounts.next().unwrap(), false);
-        self.wrap_ix(ix, vec![ro, rw])
+        // Randomly select accounts for this transaction
+        let selected = self
+            .accounts
+            .choose_multiple(&mut self.rng, self.accounts_per_transaction)
+            .copied();
+
+        // First half read-only, second half writable (50/50 split)
+        let all: Vec<_> = selected.collect();
+        let split = all.len() / 2;
+        let split = if split == 0 { 1 } else { split };
+
+        let mut accounts = Vec::new();
+        for i in 0..split {
+            accounts.push(AccountMeta::new_readonly(all[i], false));
+        }
+        for i in split..all.len() {
+            accounts.push(AccountMeta::new(all[i], false));
+        }
+
+        self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
@@ -187,14 +215,28 @@ impl TransactionProvider for CommitProvider {
 /// A factory function that creates a transaction provider based on the provided benchmark mode.
 pub fn make_provider(mode: &BenchMode, accounts: Vec<Pubkey>) -> Box<dyn TransactionProvider> {
     match mode {
-        BenchMode::SimpleByteSet => Box::new(SimpleByteSetProvider { accounts }),
-        BenchMode::ReadWrite => Box::new(ReadWriteProvider {
+        BenchMode::SimpleByteSet {
+            accounts_per_transaction,
+        } => Box::new(SimpleByteSetProvider {
             accounts,
+            accounts_per_transaction: *accounts_per_transaction as usize,
             rng: thread_rng(),
         }),
-        BenchMode::HighCuCost { iters } => Box::new(HighCuCostProvider {
+        BenchMode::ReadWrite {
+            accounts_per_transaction,
+        } => Box::new(ReadWriteProvider {
+            accounts,
+            accounts_per_transaction: *accounts_per_transaction as usize,
+            rng: thread_rng(),
+        }),
+        BenchMode::HighCuCost {
+            iters,
+            accounts_per_transaction,
+        } => Box::new(HighCuCostProvider {
             accounts,
             iters: *iters,
+            accounts_per_transaction: *accounts_per_transaction as usize,
+            rng: thread_rng(),
         }),
         BenchMode::ReadOnly {
             accounts_per_transaction,

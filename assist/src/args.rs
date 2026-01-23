@@ -12,11 +12,7 @@ pub enum AssistCommand {
     ///
     /// Prepares the environment for a benchmark run by creating and funding the necessary
     /// accounts, and ensuring that all PDAs are properly delegated.
-    Prepare {
-        /// The path to the benchmark configuration file.
-        #[structopt(parse(from_os_str))]
-        config: PathBuf,
-    },
+    Prepare { config: PathBuf },
     /// ## Report
     ///
     /// Generates a comprehensive report from a benchmark results file.
@@ -31,10 +27,8 @@ pub enum AssistCommand {
     /// performance regressions or improvements.
     Compare {
         /// The path to the first benchmark results file.
-        #[structopt(parse(from_os_str))]
         this: Option<PathBuf>,
         /// The path to the second benchmark results file.
-        #[structopt(parse(from_os_str))]
         that: Option<PathBuf>,
         /// A flag to suppress the output if no regression is detected.
         #[structopt(long)]
@@ -50,5 +44,12 @@ pub enum AssistCommand {
         /// A flag to remove all benchmark results, not just the latest one.
         #[structopt(long, short)]
         all: bool,
+    },
+    /// ## Close
+    ///
+    /// Closes benchmark accounts and refunds rent to the original payer.
+    Close {
+        /// The path to the benchmark configuration file.
+        config: PathBuf,
     },
 }

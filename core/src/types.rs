@@ -16,11 +16,14 @@ pub type BenchResult<T> = Result<T, DynError>;
 #[serde(rename_all = "kebab-case")]
 pub enum BenchMode {
     /// **(TPS)** Writes a small set of bytes to a specified number of accounts.
-    SimpleByteSet,
+    #[serde(rename_all = "kebab-case")]
+    SimpleByteSet { accounts_per_transaction: u8 },
     /// **(TPS)** Executes transactions with high computational cost to stress the validator's processing capacity.
-    HighCuCost { iters: u32 },
+    #[serde(rename_all = "kebab-case")]
+    HighCuCost { iters: u32, accounts_per_transaction: u8 },
     /// **(TPS)** Performs read and write operations across a set of accounts to test for lock contention.
-    ReadWrite,
+    #[serde(rename_all = "kebab-case")]
+    ReadWrite { accounts_per_transaction: u8 },
     /// **(TPS)** Executes read-only transactions to measure parallel processing performance.
     #[serde(rename_all = "kebab-case")]
     ReadOnly { accounts_per_transaction: u8 },

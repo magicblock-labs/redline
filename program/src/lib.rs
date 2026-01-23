@@ -62,6 +62,9 @@ fn process_instruction(
         Instruction::CommitAccounts { id } => {
             commit_accounts(&mut iter, id)?;
         }
+        Instruction::CloseAccount => {
+            close_account(&mut iter)?;
+        }
     }
 
     Ok(())

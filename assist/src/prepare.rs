@@ -56,13 +56,8 @@ impl Preparator {
     /// Creates a new `Preparator` instance, loading the necessary keypairs and establishing
     /// a connection to the Solana cluster.
     async fn new(config: &Config) -> BenchResult<Rc<Self>> {
-        let keypath = &config.keypairs;
-        let keypairs: Vec<_> = (1..=config.payers * config.parallelism)
-            .map(|n| Keypair::read_from_file(keypath.join(format!("{n}.json"))))
-            .collect::<BenchResult<_>>()
-            .inspect_err(|e| tracing::error!("failed to read keypairs for bench: {e}"))?;
-        let vault = Keypair::read_from_file(keypath.join(format!("vault.json")))
-            .inspect_err(|e| tracing::error!("failed to read keypair for vault: {e}"))?;
+        let vault = crate::common::load_vault(config)?;
+        let keypairs = crate::common::load_payers(config)?;
         let client = Rc::new(RpcClient::new_with_commitment(
             config.connection.chain_url.0.to_string(),
             CONFIRMED,

@@ -51,27 +51,33 @@ ws-connections-count = 16
 # Configures the execution of the benchmark, including the mode, load, and duration.
 [benchmark]
 # The total number of requests or transactions to send.
-iterations = 100000
+iterations = 100
 # The desired rate of requests or transactions per second (RPS/TPS).
 # This serves as a hint rather than a strict limit. If the target rate exceeds
 # the validator's capacity, the actual rate will be lower.
-rate = 3000
+rate = 3
 # The number of concurrent tasks to use for sending requests.
 concurrency = 64
 # The frequency, in milliseconds, at which account cloning should be triggered.
 # to disable cloning, set this value to 0
-clone-frequency-ms = 1000
+clone-frequency-ms = 0
 # A flag to enable or disable the preflight check for transactions.
 preflight-check = false
 # The number of accounts to use for the benchmark.
+# Important: With accounts-per-transaction = 8, you need many total accounts
+# to avoid lock contention. Recommended minimum: 500-1000 accounts for high TPS.
+# For testing, start with 100-200 accounts.
 accounts-count = 8
 # The benchmark mode to execute.
 # See below for a detailed explanation of each mode.
+# NOTE: accounts-per-transaction is now REQUIRED for all TPS modes.
+# Typical mainnet average is ~10 accounts per transaction, but 8 is recommended for balanced testing.
+# Higher values test complex transactions but increase overhead.
 mode = { mixed = [
-  { mode = { high-cu-cost = { iters = 23 } }, weight = 50 },
-  { mode = { simple-byte-set = {} }, weight = 29 },
-  { mode = { read-write = {} }, weight = 20 },
-  { mode = { commit = { accounts-per-transaction = 2 } }, weight = 1 },
+  { mode = { high-cu-cost = { iters = 23, accounts-per-transaction = 8 } }, weight = 50 },
+  { mode = { simple-byte-set = { accounts-per-transaction = 8 } }, weight = 29 },
+  { mode = { read-write = { accounts-per-transaction = 8 } }, weight = 20 },
+  # { mode = { commit = { accounts-per-transaction = 2 } }, weight = 1 },
 ] }
 
 # ### Benchmark Modes
@@ -80,14 +86,17 @@ mode = { mixed = [
 #
 # #### Transaction-Based Modes
 #
-# - **simple-byte-set**: Writes a small set of bytes to a specified number of accounts.
-#   mode = { simple-byte-set = {} }
+# All TPS modes now require the accounts-per-transaction parameter.
+#
+# - **simple-byte-set**: Writes a small set of bytes to multiple accounts.
+#   mode = { simple-byte-set = { accounts-per-transaction = 8 } }
 #
 # - **high-cu-cost**: Executes transactions with high computational cost to stress the validator's processing capacity.
-#   mode = { high-cu-cost = { iters = 28 } }
+#   mode = { high-cu-cost = { iters = 28, accounts-per-transaction = 8 } }
 #
 # - **read-write**: Performs read and write operations across a set of accounts to test for lock contention.
-#   mode = { read-write = {} }
+#   First 50% of accounts are read-only, last 50% are writable.
+#   mode = { read-write = { accounts-per-transaction = 8 } }
 #
 # - **read-only**: Executes read-only transactions to measure parallel processing performance.
 #   mode = { read-only = { accounts-per-transaction = 8 } }
@@ -115,13 +124,13 @@ mode = { mixed = [
 # frequency of each mode in the benchmark.
 #
 # [[benchmark.mode.mixed]]
-# mode = { high-cu-cost = { iters = 23 } }
+# mode = { high-cu-cost = { iters = 23, accounts-per-transaction = 8 } }
 # weight = 50
 # [[benchmark.mode.mixed]]
-# mode = { simple-byte-set = {} }
+# mode = { simple-byte-set = { accounts-per-transaction = 8 } }
 # weight = 29
 # [[benchmark.mode.mixed]]
-# mode = { read-write = {} }
+# mode = { read-write = { accounts-per-transaction = 8 } }
 # weight = 20
 # [[benchmark.mode.mixed]]
 # mode = { commit = { accounts-per-transaction = 2 } }

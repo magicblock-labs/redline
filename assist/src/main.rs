@@ -28,6 +28,7 @@ async fn main() -> BenchResult<()> {
             this,
             that,
         } => compare::compare(this, that, sensitivity, silent)?,
+        AssistCommand::Close { config } => close::close(config).await?,
     }
     Ok(())
 }
@@ -59,6 +60,8 @@ fn latest_run_output_path(mut count: usize) -> PathBuf {
 
 mod args;
 mod cleanup;
+mod close;
+mod common;
 mod compare;
 mod prepare;
 mod report;
