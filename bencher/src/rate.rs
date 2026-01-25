@@ -1,6 +1,11 @@
-use core::stats::ObservationsStats;
+//! Token-bucket rate limiting with dynamic sleep adjustment.
+//!
+//! Maintains target RPS/TPS by calculating adaptive sleep durations.
+//! Sleep time adjusts based on current progress to smooth distribution
+//! across each second.
+
+use core::stats::{ObservationsStats, StreamingStats};
 use std::{
-    collections::VecDeque,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -23,8 +28,8 @@ pub struct RateManager {
     epoch: Instant,
     /// A semaphore to control concurrency and prevent overwhelming the validator.
     permits: Arc<Semaphore>,
-    /// A collection of observed rates per second.
-    observations: VecDeque<u32>,
+    /// Streaming statistics for observed rates per second.
+    stats: StreamingStats,
 }
 
 impl RateManager {
@@ -43,7 +48,7 @@ impl RateManager {
             permits,
             count: 0,
             epoch: Instant::now(),
-            observations: VecDeque::new(),
+            stats: StreamingStats::new(),
         }
     }
 
@@ -55,17 +60,17 @@ impl RateManager {
         let elapsed = self.epoch.elapsed();
         self.count += 1;
         if elapsed >= ONESEC {
-            self.observations.push_back(self.count);
+            self.stats.push(self.count);
             self.reset();
         }
         let remaining = (self.rate - self.count).max(1) as u64;
-        let mut lag =
+        let mut sleep_dur =
             Duration::from_millis(1000u64.saturating_sub(elapsed.as_millis() as u64) / remaining);
-        if lag >= ONEMS {
-            tokio::time::sleep(lag).await;
+        if sleep_dur >= ONEMS {
+            tokio::time::sleep(sleep_dur).await;
         } else if self.count >= self.rate {
-            lag = Duration::from_millis(1000u64.saturating_sub(elapsed.as_millis() as u64));
-            tokio::time::sleep(lag).await;
+            sleep_dur = Duration::from_millis(1000u64.saturating_sub(elapsed.as_millis() as u64));
+            tokio::time::sleep(sleep_dur).await;
         }
         self.permits.clone().acquire_owned().await.unwrap()
     }
@@ -74,7 +79,7 @@ impl RateManager {
     ///
     /// Returns the final statistics for the observed rates.
     pub fn stats(self) -> ObservationsStats {
-        ObservationsStats::new(self.observations, true)
+        self.stats.finalize(true)
     }
 
     #[inline]

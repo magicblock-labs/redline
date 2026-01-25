@@ -1,5 +1,128 @@
+//! Statistical aggregation for benchmark observations.
+//!
+//! Uses streaming algorithms (Welford's for mean/variance, reservoir sampling
+//! for percentiles) to efficiently process millions of latency measurements
+//! with minimal memory overhead.
+
 use json::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use rand::{rngs::ThreadRng, thread_rng, Rng};
+use std::collections::HashMap;
+
+/// # Streaming Statistics
+///
+/// Collects observations using Welford's algorithm for mean/variance and reservoir
+/// sampling for percentiles. Memory-efficient for millions of observations.
+#[derive(Debug)]
+pub struct StreamingStats {
+    count: usize,
+    mean: f64,
+    m2: f64, // Sum of squared deviations for variance calculation
+    min: u32,
+    max: u32,
+    reservoir: Vec<u32>, // Reservoir sampling for percentile estimation
+    reservoir_size: usize,
+    rng: ThreadRng,
+}
+
+impl StreamingStats {
+    const DEFAULT_RESERVOIR_SIZE: usize = 10_000;
+
+    /// Creates a new `StreamingStats` with default reservoir size (10K samples).
+    pub fn new() -> Self {
+        Self::with_reservoir_size(Self::DEFAULT_RESERVOIR_SIZE)
+    }
+
+    /// Creates a new `StreamingStats` with specified reservoir size.
+    pub fn with_reservoir_size(reservoir_size: usize) -> Self {
+        Self {
+            count: 0,
+            mean: 0.0,
+            m2: 0.0,
+            min: u32::MAX,
+            max: 0,
+            reservoir: Vec::with_capacity(reservoir_size),
+            reservoir_size,
+            rng: thread_rng(),
+        }
+    }
+
+    /// Adds a new observation using Welford's online algorithm.
+    pub fn push(&mut self, value: u32) {
+        // Welford's online algorithm for mean and variance
+        self.count += 1;
+        let delta = value as f64 - self.mean;
+        self.mean += delta / self.count as f64;
+        self.m2 += delta * (value as f64 - self.mean);
+
+        // Track min/max
+        self.min = self.min.min(value);
+        self.max = self.max.max(value);
+
+        // Reservoir sampling for percentiles
+        if self.reservoir.len() < self.reservoir_size {
+            self.reservoir.push(value);
+        } else {
+            let j = self.rng.gen_range(0..self.count);
+            if j < self.reservoir_size {
+                self.reservoir[j] = value;
+            }
+        }
+    }
+
+    /// Finalizes the statistics and returns `ObservationsStats`.
+    pub fn finalize(mut self, invertedq: bool) -> ObservationsStats {
+        if self.count == 0 {
+            return ObservationsStats::default();
+        }
+
+        // Sort reservoir for percentile calculation
+        self.reservoir.sort_unstable();
+
+        let avg = self.mean as i32;
+        let median = if !self.reservoir.is_empty() {
+            self.reservoir[self.reservoir.len() / 2] as i32
+        } else {
+            avg
+        };
+
+        // Calculate 95th percentile from reservoir
+        let q95_count = (self.reservoir.len() as f64 * 0.95).ceil() as usize;
+        let p95_idx = if invertedq {
+            self.reservoir.len().saturating_sub(q95_count + 1)
+        } else {
+            q95_count.saturating_sub(1).min(self.reservoir.len() - 1)
+        };
+        let quantile95 = if !self.reservoir.is_empty() {
+            self.reservoir[p95_idx] as i32
+        } else {
+            avg
+        };
+
+        // Calculate standard deviation from variance
+        let variance = if self.count > 1 {
+            self.m2 / self.count as f64
+        } else {
+            0.0
+        };
+        let stddev = variance.sqrt() as u32;
+
+        ObservationsStats {
+            count: self.count,
+            median,
+            min: self.min,
+            max: self.max,
+            avg,
+            quantile95,
+            stddev,
+        }
+    }
+}
+
+impl Default for StreamingStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// # Benchmark Statistics
 ///
@@ -119,46 +242,6 @@ impl ObservationsStats {
             avg: sum.4 / total_count as i32,
             quantile95: sum.5 / total_count as i32,
             stddev: sum.6 / total_count as u32,
-        }
-    }
-
-    /// # New Observation Statistics
-    ///
-    /// Creates a new `ObservationsStats` instance from a vector of observations.
-    pub fn new(mut observations: VecDeque<u32>, invertedq: bool) -> Self {
-        if observations.is_empty() {
-            return Self::default();
-        }
-        observations.make_contiguous().sort();
-        let count = observations.len();
-        let sum: u64 = observations.iter().map(|&x| x as u64).sum();
-        let avg = (sum / count as u64) as i32;
-        let median = observations[count / 2] as i32;
-        let min = *observations.front().unwrap();
-        let max = *observations.back().unwrap();
-        let q95 = (count as f64 * 0.95).ceil() as usize;
-        let qindex = if invertedq {
-            count.saturating_sub(q95 + 1)
-        } else {
-            q95.saturating_sub(1)
-        };
-        let quantile95 = observations[qindex] as i32;
-
-        let variance = observations
-            .iter()
-            .map(|&x| ((x as i64 - avg as i64).pow(2)) as u64)
-            .sum::<u64>()
-            / count as u64;
-        let stddev = (variance as f64).sqrt() as u32;
-
-        ObservationsStats {
-            count,
-            median,
-            min,
-            max,
-            avg,
-            quantile95,
-            stddev,
         }
     }
 }

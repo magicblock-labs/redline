@@ -7,6 +7,10 @@ use crate::{
     extractor::blockhash_extractor, http::Connection, payload, BenchResult, ShutDownListener,
 };
 
+/// Blockhash refresh interval (23 seconds).
+/// Solana blockhashes expire at ~60s; 23s provides safety margin for multiple refreshes.
+const BLOCKHASH_REFRESH: Duration = Duration::from_secs(23);
+
 /// # Blockhash Provider
 ///
 /// A provider for fetching and caching the latest blockhash from the Solana RPC endpoint.
@@ -59,7 +63,7 @@ impl BlockHashProvider {
         hash: Rc<RefCell<Hash>>,
         mut shutdown: ShutDownListener,
     ) {
-        let mut interval = tokio::time::interval(Duration::from_secs(23));
+        let mut interval = tokio::time::interval(BLOCKHASH_REFRESH);
         loop {
             tokio::select! {
                 _ = interval.tick() => {

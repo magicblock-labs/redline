@@ -16,9 +16,7 @@ pub fn blockhash() -> String {
 /// Creates a JSON payload for an `accountSubscribe` RPC request.
 pub fn account_subscription(pubkey: Pubkey, encoding: AccountEncoding, id: u64) -> String {
     format!(
-        r#"{{"jsonrpc":"2.0","id":{},"method":"accountSubscribe","params":["{}",{{"encoding":"{}","commitment":"processed"}}]}}"#,
-        id,
-        pubkey,
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"accountSubscribe","params":["{pubkey}",{{"encoding":"{}","commitment":"processed"}}]}}"#,
         encoding.as_str()
     )
 }
@@ -39,8 +37,7 @@ pub fn signature_status(txn: &Transaction) -> String {
 /// Creates a JSON payload for a `signatureSubscribe` RPC request.
 pub fn signature_subscription(signature: Signature, id: u64) -> String {
     format!(
-        r#"{{"jsonrpc":"2.0","id":{},"method":"signatureSubscribe","params":["{signature}",{{"commitment":"processed"}}]}}"#,
-        id,
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"signatureSubscribe","params":["{signature}",{{"commitment":"processed"}}]}}"#
     )
 }
 
@@ -81,7 +78,7 @@ pub fn get_multiple_accounts(pubkeys: &[Pubkey], encoding: AccountEncoding, id: 
 ///
 /// Creates a JSON payload for a `getBalance` RPC request.
 pub fn get_balance(pubkey: Pubkey, id: u64) -> String {
-    format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"getBalance","params":["{pubkey}"]}}"#,)
+    format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"getBalance","params":["{pubkey}"]}}"#)
 }
 
 /// # Get Token Account Balance Payload
@@ -89,6 +86,6 @@ pub fn get_balance(pubkey: Pubkey, id: u64) -> String {
 /// Creates a JSON payload for a `getTokenAccountBalance` RPC request.
 pub fn get_token_account_balance(pubkey: Pubkey, id: u64) -> String {
     format!(
-        r#"{{"jsonrpc":"2.0","id":{id},"method":"getTokenAccountBalance","params":["{pubkey}"]}}"#,
+        r#"{{"jsonrpc":"2.0","id":{id},"method":"getTokenAccountBalance","params":["{pubkey}"]}}"#
     )
 }

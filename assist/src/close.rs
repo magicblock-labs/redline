@@ -1,16 +1,13 @@
 use core::{config::Config, types::BenchResult};
 use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
-use commitment::CommitmentConfig;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
-use program::{instruction::Instruction, utils::derive_pda};
+use program::instruction::Instruction;
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
 use signer::Signer;
 use transaction::Transaction;
-
-const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
 
 /// # Close Command
 ///
@@ -41,10 +38,7 @@ impl Closer {
     async fn new(config: &Config) -> BenchResult<Self> {
         let vault = crate::common::load_vault(config)?;
         let keypairs = crate::common::load_payers(config)?;
-        let client = Rc::new(RpcClient::new_with_commitment(
-            config.connection.ephem_url.0.to_string(),
-            CONFIRMED,
-        ));
+        let client = crate::common::create_ephem_client(config);
 
         Ok(Self {
             config: config.clone(),
@@ -65,7 +59,7 @@ impl Closer {
         for pda_pubkey in accounts {
             let ix = Instruction::CloseAccount;
             let metas = vec![
-                AccountMeta::new(payer, true),  // vault as payer/signer
+                AccountMeta::new(payer, true), // vault as payer/signer
                 AccountMeta::new(pda_pubkey, false),
             ];
             let close_ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
@@ -73,7 +67,7 @@ impl Closer {
             let txn = Transaction::new_signed_with_payer(
                 &[close_ix],
                 Some(&payer),
-                &[&self.vault],  // vault signs
+                &[&self.vault], // vault signs
                 hash,
             );
 
@@ -99,13 +93,14 @@ impl Closer {
 
     /// Derives a set of PDA addresses for a given number of accounts.
     fn derive_pdas(&self, count: u8, space: u32) -> HashSet<Pubkey> {
-        let mut accounts = HashSet::new();
-        for kp in self.keypairs.iter().step_by(self.config.payers as usize) {
-            for seed in 1..=count {
-                let (pubkey, _bump) = derive_pda(kp.pubkey(), space, seed, self.config.authority);
-                accounts.insert(pubkey);
-            }
-        }
-        accounts
+        crate::common::iter_pdas(
+            &self.keypairs,
+            self.config.payers as usize,
+            count,
+            space,
+            self.config.authority,
+        )
+        .map(|(pubkey, _, _, _)| pubkey)
+        .collect()
     }
 }

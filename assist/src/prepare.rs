@@ -3,14 +3,12 @@ use std::{
     cell::RefCell, collections::HashSet, fs, hash::Hash, ops::AddAssign, path::PathBuf, rc::Rc,
 };
 
-use commitment::CommitmentConfig;
 use decoder_types::UiAccountEncoding;
 use dlp::{args::DelegateArgs, instruction_builder::delegate};
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
 use program::{
-    instruction::Instruction, utils::derive_pda, DelegateAccountMetas, DelegateAccounts,
-    DELEGATION_PROGRAM_ID,
+    instruction::Instruction, DelegateAccountMetas, DelegateAccounts, DELEGATION_PROGRAM_ID,
 };
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
@@ -20,9 +18,12 @@ use solana_system_interface::instruction as sysinstruction;
 use tokio::task::LocalSet;
 use transaction::Transaction;
 
-const LAMPORTS_PER_BENCH: u64 = 200_000_000;
-const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
-const FIVE_SOL: u64 = 1_000_000_000 * 5;
+/// Funding per benchmark account (0.2 SOL).
+/// Sufficient for ~1000 transactions at 0.0002 SOL/tx fee.
+const BENCH_FUNDING: u64 = 200_000_000; // 0.2 SOL
+
+/// Airdrop amount for vault initialization.
+const VAULT_AIRDROP: u64 = 5_000_000_000; // 5 SOL
 
 /// # Prepare Command
 ///
@@ -58,16 +59,13 @@ impl Preparator {
     async fn new(config: &Config) -> BenchResult<Rc<Self>> {
         let vault = crate::common::load_vault(config)?;
         let keypairs = crate::common::load_payers(config)?;
-        let client = Rc::new(RpcClient::new_with_commitment(
-            config.connection.chain_url.0.to_string(),
-            CONFIRMED,
-        ));
+        let client = crate::common::create_chain_client(config);
 
         let pk = &vault.pubkey();
         let lamports = client.get_balance(pk).await?;
-        if lamports < FIVE_SOL / 2 {
-            tracing::info!("Airdropping {FIVE_SOL} SOL to vault");
-            client.request_airdrop(pk, FIVE_SOL).await?;
+        if lamports < VAULT_AIRDROP / 2 {
+            tracing::info!("Airdropping {} lamports to vault", VAULT_AIRDROP);
+            client.request_airdrop(pk, VAULT_AIRDROP).await?;
         }
 
         Ok(Self {
@@ -114,7 +112,7 @@ impl Preparator {
                 .await?
                 .value
                 .unwrap_or_default();
-            let lamports = LAMPORTS_PER_BENCH.saturating_sub(account.lamports);
+            let lamports = BENCH_FUNDING.saturating_sub(account.lamports);
             if lamports > 0 {
                 tracing::info!(
                     "{:>03}/{:>03} Funding keypair for benchmark: {pk}",
@@ -251,21 +249,21 @@ impl Preparator {
     ///
     /// Derives a set of PDAs for a given number of accounts.
     fn derive_pdas(&self, count: u8, space: u32) -> HashSet<Pda> {
-        let mut accounts = HashSet::new();
-        let authority = self.config.authority;
-        for kp in self.keypairs.iter().step_by(self.config.payers as usize) {
-            for seed in 1..=count {
-                let (pubkey, bump) = derive_pda(kp.pubkey(), space, seed, authority);
-                accounts.insert(Pda {
-                    pubkey,
-                    payer: kp.insecure_clone(),
-                    seed,
-                    bump,
-                    space,
-                });
-            }
-        }
-        accounts
+        crate::common::iter_pdas(
+            &self.keypairs,
+            self.config.payers as usize,
+            count,
+            space,
+            self.config.authority,
+        )
+        .map(|(pubkey, bump, seed, payer)| Pda {
+            pubkey,
+            payer,
+            seed,
+            bump,
+            space,
+        })
+        .collect()
     }
 
     /// # Transfer Funds

@@ -1,3 +1,9 @@
+//! HTTP connection pooling with ready/busy queue management.
+//!
+//! Maintains a pool of persistent HTTP/1 or HTTP/2 connections to the validator.
+//! Connections are moved between ready/busy queues based on their state,
+//! providing O(1) connection acquisition.
+
 use core::config::ConnectionSettings;
 use core::types::{ConnectionType, Url};
 use std::collections::VecDeque;
@@ -36,47 +42,54 @@ pub struct Connection {
 
 /// # Connection Pool
 ///
-/// Manages a pool of `Connection` instances to handle multiple concurrent HTTP requests,
-/// providing a simple interface for obtaining a connection and ensuring efficient reuse.
+/// Manages a pool of `Connection` instances with ready/busy queues for O(1) acquisition.
+/// Ready connections are immediately available; busy connections are being prepared.
 pub struct ConnectionPool {
-    connections: VecDeque<Connection>,
+    ready: VecDeque<Connection>,
+    busy: VecDeque<Connection>,
 }
 
 impl ConnectionPool {
     /// # New Connection Pool
     ///
     /// Creates a new `ConnectionPool` with the specified number of connections.
+    /// All connections start in the ready queue.
     pub async fn new(config: &ConnectionSettings) -> BenchResult<Self> {
         let count = config.http_connections_count;
-        let mut connections = VecDeque::with_capacity(count);
+        let mut ready = VecDeque::with_capacity(count);
         for _ in 0..count {
             let con = Connection::new(&config.ephem_url, config.http_connection_type).await?;
-            connections.push_back(con);
+            ready.push_back(con);
         }
-        Ok(Self { connections })
+        Ok(Self {
+            ready,
+            busy: VecDeque::new(),
+        })
     }
 
     /// # Get Connection
     ///
-    /// Obtains a `ConnectionGuard` from the pool, which provides exclusive access to a connection
-    /// and automatically returns it to the pool when dropped.
+    /// Obtains a `ConnectionGuard` from the pool with O(1) access from ready queue.
+    /// If no ready connections available, waits for a busy connection to become ready.
     pub async fn connection(&mut self) -> BenchResult<ConnectionGuard<'_>> {
-        let mut i = 0;
-        loop {
-            if let Some(mut con) = self.connections.pop_front() {
-                if con.is_ready() {
-                    return Ok(ConnectionGuard {
-                        con: Some(con),
-                        pool: &mut self.connections,
-                    });
-                }
-                i += 1;
-                if i >= self.connections.len() {
-                    con.ready().await?;
-                }
-                self.connections.push_back(con);
-            }
+        if let Some(con) = self.ready.pop_front() {
+            return Ok(ConnectionGuard {
+                con: Some(con),
+                pool: self,
+            });
         }
+
+        // No ready connections - wait for a busy one to become ready
+        let mut con = self
+            .busy
+            .pop_front()
+            .expect("connection pool should not be empty");
+        con.ready().await?;
+
+        Ok(ConnectionGuard {
+            con: Some(con),
+            pool: self,
+        })
     }
 }
 
@@ -99,16 +112,6 @@ impl Connection {
                 pending: Box::pin(sender.send_request(request)),
                 extractor,
             },
-        }
-    }
-
-    /// # Is Ready
-    ///
-    /// Checks if the connection is ready to send another request.
-    fn is_ready(&self) -> bool {
-        match &self.inner {
-            InnerConnection::Http1(sender) => sender.is_ready(),
-            InnerConnection::Http2(sender) => sender.is_ready(),
         }
     }
 
@@ -158,10 +161,10 @@ impl Connection {
 /// # Connection Guard
 ///
 /// A guard that provides exclusive access to a `Connection` and ensures that it is
-/// returned to the pool when dropped.
+/// returned to the ready queue when dropped.
 pub struct ConnectionGuard<'a> {
     con: Option<Connection>,
-    pool: &'a mut VecDeque<Connection>,
+    pool: &'a mut ConnectionPool,
 }
 
 impl Deref for ConnectionGuard<'_> {
@@ -180,7 +183,7 @@ impl DerefMut for ConnectionGuard<'_> {
 impl Drop for ConnectionGuard<'_> {
     fn drop(&mut self) {
         if let Some(con) = self.con.take() {
-            self.pool.push_back(con);
+            self.pool.ready.push_back(con);
         }
     }
 }

@@ -16,5 +16,6 @@ serde = { workspace = true }
 json = { workspace = true }
 hyper = { workspace = true }
 tracing = { workspace = true }
+rand = { workspace = true }
 toml = "0.8"
 serde_with = "3"

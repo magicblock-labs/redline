@@ -20,7 +20,10 @@ pub enum BenchMode {
     SimpleByteSet { accounts_per_transaction: u8 },
     /// **(TPS)** Executes transactions with high computational cost to stress the validator's processing capacity.
     #[serde(rename_all = "kebab-case")]
-    HighCuCost { iters: u32, accounts_per_transaction: u8 },
+    HighCuCost {
+        iters: u32,
+        accounts_per_transaction: u8,
+    },
     /// **(TPS)** Performs read and write operations across a set of accounts to test for lock contention.
     #[serde(rename_all = "kebab-case")]
     ReadWrite { accounts_per_transaction: u8 },

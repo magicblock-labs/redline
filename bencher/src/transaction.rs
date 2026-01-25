@@ -36,15 +36,43 @@ pub trait TransactionProvider {
     fn accounts(&self) -> Vec<Pubkey>;
 }
 
+/// # Base Provider
+///
+/// Generic provider for simple transaction patterns with consistent account selection.
+struct BaseProvider<const READONLY: bool = false> {
+    accounts: Vec<Pubkey>,
+    count: usize,
+    rng: ThreadRng,
+}
+
+impl<const RO: bool> BaseProvider<RO> {
+    fn new(accounts: Vec<Pubkey>, count: usize) -> Self {
+        Self {
+            accounts,
+            count,
+            rng: thread_rng(),
+        }
+    }
+
+    fn random_accounts(&mut self) -> Vec<AccountMeta> {
+        self.accounts
+            .choose_multiple(&mut self.rng, self.count)
+            .map(|&pk| {
+                if RO {
+                    AccountMeta::new_readonly(pk, false)
+                } else {
+                    AccountMeta::new(pk, false)
+                }
+            })
+            .collect()
+    }
+}
+
 /// # SimpleByteSet Provider
 ///
 /// Generates simple transactions that write a small set of bytes to multiple accounts.
 /// This is useful for basic throughput testing.
-pub struct SimpleByteSetProvider {
-    accounts: Vec<Pubkey>,
-    accounts_per_transaction: usize,
-    rng: ThreadRng,
-}
+pub struct SimpleByteSetProvider(BaseProvider<false>);
 
 /// # HighCuCost Provider
 ///
@@ -70,20 +98,12 @@ pub struct ReadWriteProvider {
 /// # ReadOnly Provider
 ///
 /// Generates read-only transactions to measure parallel processing performance.
-pub struct ReadOnlyProvider {
-    accounts: Vec<Pubkey>,
-    rng: ThreadRng,
-    count: usize,
-}
+pub struct ReadOnlyProvider(BaseProvider<true>);
 
 /// # Commit Provider
 ///
 /// Generates transactions that commit the state to the base chain in the Ephemeral Rollup.
-pub struct CommitProvider {
-    accounts: Vec<Pubkey>,
-    rng: ThreadRng,
-    count: usize,
-}
+pub struct CommitProvider(BaseProvider<true>);
 
 impl TransactionProvider for SimpleByteSetProvider {
     fn name(&self) -> &'static str {
@@ -91,16 +111,11 @@ impl TransactionProvider for SimpleByteSetProvider {
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
         let ix = Instruction::SimpleByteSet { id };
-        // Randomly select accounts for this transaction
-        let selected = self
-            .accounts
-            .choose_multiple(&mut self.rng, self.accounts_per_transaction)
-            .copied();
-        let accounts = selected.map(|pda| AccountMeta::new(pda, false)).collect();
+        let accounts = self.0.random_accounts();
         self.wrap_ix(ix, accounts)
     }
     fn accounts(&self) -> Vec<Pubkey> {
-        self.accounts.clone()
+        self.0.accounts.clone()
     }
 }
 
@@ -168,20 +183,13 @@ impl TransactionProvider for ReadOnlyProvider {
         "ReadOnly"
     }
     fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
-        // Randomly selects a set of accounts for the read-only operation.
-        let accounts = self
-            .accounts
-            .choose_multiple(&mut self.rng, self.count)
-            .copied();
         let ix = Instruction::ReadAccountsData { id };
-        let accounts = accounts
-            .map(|acc| AccountMeta::new_readonly(acc, false))
-            .collect();
+        let accounts = self.0.random_accounts();
         self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        self.accounts.clone()
+        self.0.accounts.clone()
     }
 }
 
@@ -195,18 +203,12 @@ impl TransactionProvider for CommitProvider {
             AccountMeta::new(MAGIC_CONTEXT_ID, false),
             AccountMeta::new_readonly(MAGIC_PROGRAM_ID, false),
         ];
-        // Randomly selects a set of accounts to be committed.
-        accounts.extend(
-            self.accounts
-                .choose_multiple(&mut self.rng, self.count)
-                .copied()
-                .map(|acc| AccountMeta::new_readonly(acc, false)),
-        );
+        accounts.extend(self.0.random_accounts());
         self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        self.accounts.clone()
+        self.0.accounts.clone()
     }
 }
 
@@ -217,11 +219,10 @@ pub fn make_provider(mode: &BenchMode, accounts: Vec<Pubkey>) -> Box<dyn Transac
     match mode {
         BenchMode::SimpleByteSet {
             accounts_per_transaction,
-        } => Box::new(SimpleByteSetProvider {
+        } => Box::new(SimpleByteSetProvider(BaseProvider::new(
             accounts,
-            accounts_per_transaction: *accounts_per_transaction as usize,
-            rng: thread_rng(),
-        }),
+            *accounts_per_transaction as usize,
+        ))),
         BenchMode::ReadWrite {
             accounts_per_transaction,
         } => Box::new(ReadWriteProvider {
@@ -240,18 +241,16 @@ pub fn make_provider(mode: &BenchMode, accounts: Vec<Pubkey>) -> Box<dyn Transac
         }),
         BenchMode::ReadOnly {
             accounts_per_transaction,
-        } => Box::new(ReadOnlyProvider {
+        } => Box::new(ReadOnlyProvider(BaseProvider::new(
             accounts,
-            count: *accounts_per_transaction as usize,
-            rng: thread_rng(),
-        }),
+            *accounts_per_transaction as usize,
+        ))),
         BenchMode::Commit {
             accounts_per_transaction,
-        } => Box::new(CommitProvider {
+        } => Box::new(CommitProvider(BaseProvider::new(
             accounts,
-            count: *accounts_per_transaction as usize,
-            rng: thread_rng(),
-        }),
+            *accounts_per_transaction as usize,
+        ))),
         // This function is only for transaction-based modes, so it will panic
         // if an RPC-based mode is provided.
         _ => panic!("Unsupported mode for make_provider"),

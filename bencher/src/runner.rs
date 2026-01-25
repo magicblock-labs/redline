@@ -27,6 +27,10 @@ use std::{
 };
 use tokio::{sync::oneshot, time::timeout};
 
+/// Timeout for account update confirmations.
+/// Most updates arrive <500ms; 3s handles network delays + retries.
+const CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// # Bench Runner
 ///
 /// The unified benchmark runner, capable of handling both TPS and RPS benchmarks. It
@@ -57,8 +61,8 @@ pub struct BenchRunner {
     progress: Arc<AtomicU64>,
 }
 
-type AccountConfirmationReceiver = Option<oneshot::Receiver<u64>>;
-type SignatureConfirmationReceiver = Option<oneshot::Receiver<bool>>;
+type AcctRx = Option<oneshot::Receiver<u64>>;
+type SigRx = Option<oneshot::Receiver<bool>>;
 
 impl BenchRunner {
     /// # New Bench Runner
@@ -226,39 +230,32 @@ impl BenchRunner {
             }
             // Wait for the account update confirmation, if subscribed.
             if let Some(rx) = account_rx {
-                if timeout(Duration::from_secs(3), rx).await.is_err() {
+                if timeout(CONFIRMATION_TIMEOUT, rx).await.is_err() {
                     account_confirmations.borrow_mut().remove(id);
                 };
             }
             // Wait for the signature confirmation, if subscribed.
             if let Some(rx) = signature_rx {
-                let _ = timeout(Duration::from_secs(3), rx).await;
+                let _ = timeout(CONFIRMATION_TIMEOUT, rx).await;
             }
             drop(shutdown);
         });
     }
 
-    async fn subscribe_if_needed(
-        &mut self,
-        id: u64,
-    ) -> (AccountConfirmationReceiver, SignatureConfirmationReceiver) {
+    async fn subscribe_if_needed(&mut self, id: u64) -> (AcctRx, SigRx) {
         let total_sync = self.config.confirmations.enforce_total_sync;
-        // A macro to conditionally subscribe to a confirmation feed. If total_sync is enabled,
-        // it creates a new oneshot channel and passes the sender to the confirmation database.
-        // Otherwise, it just tracks the confirmation without creating a channel.
-        macro_rules! maybe_subscribe {
-            ($subscribe:expr, $confirmations:expr) => {
-                if $subscribe && total_sync {
-                    let (tx, rx) = oneshot::channel();
-                    $confirmations.borrow_mut().track(id, Some(tx));
-                    Some(rx)
-                } else {
-                    if $subscribe {
-                        $confirmations.borrow_mut().track(id, None);
-                    }
-                    None
-                }
-            };
+        // Helper functions for conditional subscription to confirmation feeds.
+        fn subscribe_with_sync<V>(
+            id: u64,
+            confirmations: &ConfirmationsDB<V>,
+        ) -> oneshot::Receiver<V> {
+            let (tx, rx) = oneshot::channel();
+            confirmations.borrow_mut().track(id, Some(tx));
+            rx
+        }
+
+        fn subscribe_no_sync<V>(id: u64, confirmations: &ConfirmationsDB<V>) {
+            confirmations.borrow_mut().track(id, None);
         }
 
         // for transaction requests, potentially setup extra latency monitoring
@@ -276,16 +273,22 @@ impl BenchRunner {
                     id,
                 };
                 let _ = con.send(sub).await;
-                signature_rx = maybe_subscribe!(
-                    self.config.confirmations.subscribe_to_signatures,
-                    self.signature_confirmations
-                );
+                signature_rx = if total_sync {
+                    Some(subscribe_with_sync(id, &self.signature_confirmations))
+                } else {
+                    subscribe_no_sync(id, &self.signature_confirmations);
+                    None
+                };
             }
 
-            let account_rx = maybe_subscribe!(
-                self.config.confirmations.subscribe_to_accounts,
-                self.account_confirmations
-            );
+            let account_rx = if !self.config.confirmations.subscribe_to_accounts {
+                None
+            } else if total_sync {
+                Some(subscribe_with_sync(id, &self.account_confirmations))
+            } else {
+                subscribe_no_sync(id, &self.account_confirmations);
+                None
+            };
             (account_rx, signature_rx)
         } else {
             (None, None)
@@ -304,34 +307,28 @@ pub struct BenchResults {
     rate: ObservationsStats,
 }
 
+/// Helper function to finalize a confirmation database's statistics.
+/// Unwraps the Rc and RefCell to get the inner Confirmations struct.
+fn finalize<V: std::fmt::Debug>(db: ConfirmationsDB<V>) -> ObservationsStats {
+    Rc::try_unwrap(db).unwrap().into_inner().finalize()
+}
+
 impl BenchResults {
     /// # Calculate Statistics
     ///
     /// Finalizes the benchmark results and calculates the statistics.
     pub fn stats(self) -> BenchStatistics {
-        // A macro to finalize the statistics of a confirmation database. It unwraps
-        // the Rc and RefCell to get the inner Confirmations struct and then calls
-        // the finalize method to calculate the statistics.
-        macro_rules! finalize {
-            ($confirmation: expr) => {
-                Rc::try_unwrap($confirmation)
-                    .unwrap()
-                    .into_inner()
-                    .finalize()
-            };
-        }
-
         let mut request_stats = HashMap::new();
 
         for (mode_name, confirmations) in self.delivery_confirmations {
-            request_stats.insert(mode_name.to_string(), finalize!(confirmations));
+            request_stats.insert(mode_name.to_string(), finalize(confirmations));
         }
 
         BenchStatistics {
             configuration: json::to_value(&self.config).unwrap(),
             request_stats,
-            signature_confirmation_latency: finalize!(self.signature_confirmations),
-            account_update_latency: finalize!(self.account_confirmations),
+            signature_confirmation_latency: finalize(self.signature_confirmations),
+            account_update_latency: finalize(self.account_confirmations),
             rps: self.rate,
         }
     }

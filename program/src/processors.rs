@@ -304,8 +304,7 @@ pub fn account_data_copy(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> P
         // Copy user data from source to destination
         let copy_len = (src_data.len() - offset).min(dst_data.len() - index);
         if copy_len > 0 {
-            dst_data[index..index + copy_len]
-                .copy_from_slice(&src_data[offset..offset + copy_len]);
+            dst_data[index..index + copy_len].copy_from_slice(&src_data[offset..offset + copy_len]);
             total_bytes += copy_len;
         }
     }

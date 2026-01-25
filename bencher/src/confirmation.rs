@@ -1,12 +1,7 @@
 // bencher/src/confirmation.rs
 
-use core::stats::ObservationsStats;
-use std::{
-    cell::RefCell,
-    collections::{HashMap, VecDeque},
-    rc::Rc,
-    time::Instant,
-};
+use core::stats::{ObservationsStats, StreamingStats};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Instant};
 
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
@@ -29,8 +24,8 @@ type ConfirmationReceiver<V> = Receiver<(u64, V)>;
 pub struct Confirmations<V> {
     /// A map of pending confirmations, with the key being the request ID.
     pending: HashMap<u64, PendingConfirmation<V>>,
-    /// A vector of observed latencies, in microseconds.
-    observations: VecDeque<u32>,
+    /// Streaming statistics for observed latencies (in microseconds).
+    stats: StreamingStats,
     /// The sender part of the confirmation channel.
     pub tx: ConfirmationSender<V>,
 }
@@ -110,7 +105,7 @@ impl<V> Confirmations<V> {
         let (tx, rx) = mpsc::channel(1024);
         let confirmations = Confirmations {
             pending: HashMap::new(),
-            observations: VecDeque::new(),
+            stats: StreamingStats::new(),
             tx,
         };
         (Rc::new(confirmations.into()), rx)
@@ -148,15 +143,11 @@ impl<V> Confirmations<V> {
     /// * `id` - The unique identifier for the request.
     /// * `v` - The value associated with the confirmation.
     pub fn observe(&mut self, id: u64, v: V) {
-        const MAX_OBSERVATIONS: usize = 2 << 21; // ~4 million
         let Some(pending) = self.pending.remove(&id) else {
             return;
         };
         let took = pending.start.elapsed().as_micros() as u32;
-        if self.observations.len() > MAX_OBSERVATIONS {
-            self.observations.pop_front();
-        }
-        self.observations.push_back(took);
+        self.stats.push(took);
         if let Some(tx) = pending.tx {
             let _ = tx.send(v);
         }
@@ -166,6 +157,6 @@ impl<V> Confirmations<V> {
     ///
     /// Calculates and returns the final `ObservationsStats` for all recorded confirmations.
     pub fn finalize(self) -> ObservationsStats {
-        ObservationsStats::new(self.observations, false)
+        self.stats.finalize(false)
     }
 }

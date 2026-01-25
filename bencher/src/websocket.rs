@@ -1,7 +1,11 @@
-// bencher/src/websocket.rs
+//! WebSocket subscription management with graceful shutdown.
+//!
+//! Manages multiple WS connections using round-robin distribution.
+//! Handles subscription confirmations and routes notifications to
+//! appropriate channels. Buffers out-of-order messages until subscription confirmed.
 
 use core::{config::ConnectionSettings, types::Url};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use fastwebsockets::{handshake, CloseCode, Frame, OpCode, Payload, WebSocket};
 use http_body_util::Empty;
@@ -28,8 +32,8 @@ pub struct WsWorker<F, V> {
     ws: WebSocket<TokioIo<Upgraded>>,
     rx: ShutDownReceiver<Subscription<V>>,
     subscriptions: HashMap<u64, Subscription<V>>,
-    inflights: HashMap<u64, Subscription<V>>,
-    lost: HashMap<u64, Payload<'static>>,
+    pending: HashMap<u64, Subscription<V>>,
+    buffered: HashMap<u64, Payload<'static>>,
     extractor: F,
 }
 
@@ -51,6 +55,13 @@ pub struct Subscription<V> {
 pub struct WebsocketPool<V> {
     connections: Vec<Sender<Subscription<V>>>,
     next: usize,
+}
+
+/// Subscription confirmation message from WebSocket server.
+#[derive(Deserialize, Debug)]
+struct Confirmation {
+    result: u64,
+    id: u64,
 }
 
 impl<F, V> WsWorker<F, V>
@@ -84,13 +95,83 @@ where
             ws,
             rx,
             subscriptions: HashMap::default(),
-            inflights: HashMap::default(),
+            pending: HashMap::default(),
             extractor,
-            lost: HashMap::default(),
+            buffered: HashMap::default(),
         };
 
         tokio::task::spawn_local(this.run());
         Ok(tx)
+    }
+
+    /// Handles an incoming WebSocket frame.
+    async fn handle_frame(&mut self, frame: Frame<'static>) {
+        if !matches!(frame.opcode, OpCode::Text) {
+            return;
+        }
+
+        let mut payload = frame.payload;
+
+        // Check if this is a subscription confirmation message
+        if let Ok(confirmed) = json::from_slice::<Confirmation>(&payload) {
+            match self.pending.entry(confirmed.id) {
+                Entry::Occupied(e) => {
+                    let sub = e.remove();
+                    self.subscriptions.insert(confirmed.result, sub);
+                    // Use buffered payload if available, otherwise skip processing
+                    if let Some(pl) = self.buffered.remove(&confirmed.result) {
+                        payload = pl;
+                    } else {
+                        return;
+                    }
+                }
+                Entry::Vacant(_) => return,
+            }
+        }
+
+        // Process notification message
+        let Ok(params) = json::get(&*payload, ["params"]) else {
+            return;
+        };
+        let Some(id) = params.get("subscription").as_u64() else {
+            return;
+        };
+        let Some(result) = params.get("result") else {
+            return;
+        };
+        let Some(extracted) = (self.extractor)(result) else {
+            return;
+        };
+        let Some(sub) = self.subscriptions.get(&id) else {
+            self.buffered.insert(id, payload);
+            return;
+        };
+
+        if sub.tx.send((sub.id, extracted)).await.is_err() || sub.oneshot {
+            self.subscriptions.remove(&id);
+        }
+    }
+
+    /// Handles a new subscription request. Returns false if shutdown was requested.
+    async fn handle_subscription(&mut self, sub: Option<Subscription<V>>) -> bool {
+        let Some(mut sub) = sub else {
+            let _ = self
+                .ws
+                .write_frame(Frame::close(CloseCode::Normal.into(), b""))
+                .await;
+            return false;
+        };
+
+        let payload = Payload::Owned(std::mem::take(&mut sub.payload).into_bytes());
+        // TODO: reconnect on error
+        self.ws
+            .write_frame(Frame::text(payload))
+            .await
+            .expect("failed to send data websocket");
+        self.ws.flush().await.expect("failed to flush ws stream");
+        self.pending.insert(sub.id, sub);
+
+        true
     }
 
     /// # Run WebSocket Worker
@@ -98,63 +179,15 @@ where
     /// The main loop for the `WsWorker`, handling incoming messages, subscriptions,
     /// and shutdown signals.
     async fn run(mut self) {
-        #[derive(Deserialize, Debug)]
-        struct Confirmation {
-            result: u64,
-            id: u64,
-        }
         loop {
             tokio::select! {
                 Ok(frame) = self.ws.read_frame() => {
-                    if !matches!(frame.opcode, OpCode::Text) {
-                        continue;
-                    }
-                    let mut payload = frame.payload;
-                    if let Ok(confirmed) = json::from_slice::<Confirmation>(&payload) {
-                        let Some(sub) = self.inflights.remove(&confirmed.id) else {
-                            continue;
-                        };
-                        self.subscriptions.insert(confirmed.result, sub);
-                        if let Some(pl) = self.lost.remove(&confirmed.result) {
-                            payload = pl;
-                        } else {
-                            continue;
-                        }
-                    }
-                    let Ok(params) = json::get(&*payload, ["params"]) else {
-                        continue;
-                    };
-                    let Some(id) = params.get("subscription").as_u64() else {
-                        continue;
-                    };
-                    let Some(result) = params.get("result") else {
-                        continue;
-                    };
-                    let Some(extracted) = (self.extractor)(result) else {
-                        continue;
-                    };
-                    let Some(sub) = self.subscriptions.get(&id) else {
-                        self.lost.insert(id, payload);
-                        continue;
-                    };
-                    if sub.tx.send((sub.id, extracted)).await.is_err() || sub.oneshot {
-                        self.subscriptions.remove(&id);
-                    }
+                    self.handle_frame(frame).await;
                 }
                 sub = self.rx.recv() => {
-                    let Some(mut sub) = sub else {
-                        let _ = self.ws
-                            .write_frame(Frame::close(CloseCode::Normal.into(), b"")).await;
+                    if !self.handle_subscription(sub).await {
                         break;
-                    };
-                    let payload = Payload::Owned(std::mem::take(&mut sub.payload).into_bytes());
-                    // TODO: reconnect on error
-                    self.ws
-                        .write_frame(Frame::text(payload))
-                        .await
-                        .expect("failed to send data websocket");
-                    self.ws.flush().await.expect("failed to flush ws stream");
-                    self.inflights.insert(sub.id, sub);
+                    }
                 }
             }
         }

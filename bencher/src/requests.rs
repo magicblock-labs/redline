@@ -87,6 +87,46 @@ impl RequestBuilder for TransactionRequestBuilder {
 
 // --- RPC Request Builders ---
 
+/// # Generic RPC Request Builder
+///
+/// A generic request builder for RPC calls that select a single account.
+struct RpcRequestBuilder<F> {
+    accounts: Vec<Pubkey>,
+    payload_fn: F,
+    name: &'static str,
+}
+
+impl<F> RpcRequestBuilder<F>
+where
+    F: FnMut(Pubkey, u64) -> String,
+{
+    fn new(accounts: Vec<Pubkey>, payload_fn: F, name: &'static str) -> Self {
+        Self {
+            accounts,
+            payload_fn,
+            name,
+        }
+    }
+}
+
+impl<F> RequestBuilder for RpcRequestBuilder<F>
+where
+    F: FnMut(Pubkey, u64) -> String,
+{
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn build(&mut self, id: u64) -> Request<String> {
+        let pubkey = self.accounts[id as usize % self.accounts.len()];
+        Request::new((self.payload_fn)(pubkey, id))
+    }
+
+    fn extractor(&self) -> fn(json::LazyValue) -> Option<bool> {
+        value_extractor
+    }
+}
+
 /// # Get Account Info Request Builder
 ///
 /// A request builder that generates `getAccountInfo` RPC requests.
@@ -126,46 +166,6 @@ impl RequestBuilder for GetMultipleAccountsRequestBuilder {
             self.encoding,
             id,
         ))
-    }
-    fn extractor(&self) -> fn(json::LazyValue) -> Option<bool> {
-        value_extractor
-    }
-}
-
-/// # Get Balance Request Builder
-///
-/// A request builder that generates `getBalance` RPC requests.
-pub struct GetBalanceRequestBuilder {
-    accounts: Vec<Pubkey>,
-}
-
-impl RequestBuilder for GetBalanceRequestBuilder {
-    fn name(&self) -> &'static str {
-        "GetBalance"
-    }
-    fn build(&mut self, id: u64) -> Request<String> {
-        let pubkey = self.accounts[id as usize % self.accounts.len()];
-        Request::new(payload::get_balance(pubkey, id))
-    }
-    fn extractor(&self) -> fn(json::LazyValue) -> Option<bool> {
-        value_extractor
-    }
-}
-
-/// # Get Token Account Balance Request Builder
-///
-/// A request builder that generates `getTokenAccountBalance` RPC requests.
-pub struct GetTokenAccountBalanceRequestBuilder {
-    accounts: Vec<Pubkey>,
-}
-
-impl RequestBuilder for GetTokenAccountBalanceRequestBuilder {
-    fn name(&self) -> &'static str {
-        "GetTokenAccountBalance"
-    }
-    fn build(&mut self, id: u64) -> Request<String> {
-        let pubkey = self.accounts[id as usize % self.accounts.len()];
-        Request::new(payload::get_token_account_balance(pubkey, id))
     }
     fn extractor(&self) -> fn(json::LazyValue) -> Option<bool> {
         value_extractor
@@ -234,10 +234,16 @@ pub fn make_builder(
         BenchMode::GetMultipleAccounts => {
             Box::new(GetMultipleAccountsRequestBuilder { accounts, encoding })
         }
-        BenchMode::GetBalance => Box::new(GetBalanceRequestBuilder { accounts }),
-        BenchMode::GetTokenAccountBalance => {
-            Box::new(GetTokenAccountBalanceRequestBuilder { accounts })
-        }
+        BenchMode::GetBalance => Box::new(RpcRequestBuilder::new(
+            accounts,
+            payload::get_balance,
+            "GetBalance",
+        )),
+        BenchMode::GetTokenAccountBalance => Box::new(RpcRequestBuilder::new(
+            accounts,
+            payload::get_token_account_balance,
+            "GetTokenAccountBalance",
+        )),
         BenchMode::Mixed(modes) => {
             let (providers, weights): (Vec<_>, Vec<_>) = modes
                 .iter()
