@@ -93,7 +93,7 @@ impl Preparator {
             }
             Keypair::new().write_to_file(path)?;
         }
-        let vault = keypath.join(format!("vault.json"));
+        let vault = keypath.join("vault.json");
         if !fs::exists(&vault)? {
             Keypair::new().write_to_file(vault)?;
         }
@@ -122,7 +122,7 @@ impl Preparator {
                 self.transfer(pk, lamports).await?;
             }
             if account.owner != DELEGATION_PROGRAM_ID {
-                self.delegate_oncurve(&kp).await?;
+                self.delegate_oncurve(kp).await?;
             }
         }
         Ok(())

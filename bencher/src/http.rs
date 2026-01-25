@@ -243,8 +243,8 @@ impl AsRef<[u8]> for Data {
     fn as_ref(&self) -> &[u8] {
         match self {
             Data::Empty => &[],
-            Data::SingleChunk(chunk) => &chunk,
-            Data::MultiChunk(chunk) => &chunk,
+            Data::SingleChunk(chunk) => chunk,
+            Data::MultiChunk(chunk) => chunk,
         }
     }
 }

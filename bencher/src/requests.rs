@@ -127,26 +127,6 @@ where
     }
 }
 
-/// # Get Account Info Request Builder
-///
-/// A request builder that generates `getAccountInfo` RPC requests.
-pub struct GetAccountInfoRequestBuilder {
-    accounts: Vec<Pubkey>,
-    encoding: AccountEncoding,
-}
-
-impl RequestBuilder for GetAccountInfoRequestBuilder {
-    fn name(&self) -> &'static str {
-        "GetAccountInfo"
-    }
-    fn build(&mut self, id: u64) -> Request<String> {
-        let pubkey = self.accounts[id as usize % self.accounts.len()];
-        Request::new(payload::get_account_info(pubkey, self.encoding, id))
-    }
-    fn extractor(&self) -> fn(json::LazyValue) -> Option<bool> {
-        value_extractor
-    }
-}
 
 /// # Get Multiple Accounts Request Builder
 ///
@@ -230,7 +210,11 @@ pub fn make_builder(
         .map(|seed| derive_pda(base, space, seed, config.authority).0)
         .collect();
     match mode {
-        BenchMode::GetAccountInfo => Box::new(GetAccountInfoRequestBuilder { accounts, encoding }),
+        BenchMode::GetAccountInfo => Box::new(RpcRequestBuilder::new(
+            accounts,
+            move |pk, id| payload::get_account_info(pk, encoding, id),
+            "GetAccountInfo",
+        )),
         BenchMode::GetMultipleAccounts => {
             Box::new(GetMultipleAccountsRequestBuilder { accounts, encoding })
         }

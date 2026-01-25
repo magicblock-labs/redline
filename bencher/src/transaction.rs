@@ -163,11 +163,11 @@ impl TransactionProvider for ReadWriteProvider {
         let split = if split == 0 { 1 } else { split };
 
         let mut accounts = Vec::new();
-        for i in 0..split {
-            accounts.push(AccountMeta::new_readonly(all[i], false));
+        for &pk in all.iter().take(split) {
+            accounts.push(AccountMeta::new_readonly(pk, false));
         }
-        for i in split..all.len() {
-            accounts.push(AccountMeta::new(all[i], false));
+        for &pk in all.iter().skip(split) {
+            accounts.push(AccountMeta::new(pk, false));
         }
 
         self.wrap_ix(ix, accounts)

@@ -64,6 +64,20 @@ pub struct BenchRunner {
 type AcctRx = Option<oneshot::Receiver<u64>>;
 type SigRx = Option<oneshot::Receiver<bool>>;
 
+/// Helper function for subscribing with synchronization enabled.
+/// Returns a receiver that will be notified when the confirmation arrives.
+fn subscribe_with_sync<V>(id: u64, confirmations: &ConfirmationsDB<V>) -> oneshot::Receiver<V> {
+    let (tx, rx) = oneshot::channel();
+    confirmations.borrow_mut().track(id, Some(tx));
+    rx
+}
+
+/// Helper function for subscribing without synchronization.
+/// Tracks the confirmation but doesn't wait for it.
+fn subscribe_no_sync<V>(id: u64, confirmations: &ConfirmationsDB<V>) {
+    confirmations.borrow_mut().track(id, None);
+}
+
 impl BenchRunner {
     /// # New Bench Runner
     ///
@@ -243,56 +257,48 @@ impl BenchRunner {
     }
 
     async fn subscribe_if_needed(&mut self, id: u64) -> (AcctRx, SigRx) {
+        // Early return for RPC requests (no signature)
+        let Some(signature) = self.request_builder.signature() else {
+            return (None, None);
+        };
+
         let total_sync = self.config.confirmations.enforce_total_sync;
-        // Helper functions for conditional subscription to confirmation feeds.
-        fn subscribe_with_sync<V>(
-            id: u64,
-            confirmations: &ConfirmationsDB<V>,
-        ) -> oneshot::Receiver<V> {
-            let (tx, rx) = oneshot::channel();
-            confirmations.borrow_mut().track(id, Some(tx));
-            rx
-        }
 
-        fn subscribe_no_sync<V>(id: u64, confirmations: &ConfirmationsDB<V>) {
-            confirmations.borrow_mut().track(id, None);
-        }
+        // Setup signature subscription if enabled
+        let signature_rx = if self.config.confirmations.subscribe_to_signatures {
+            let con = self.signatures_websocket.connection();
+            let tx = self.signature_confirmations.borrow().tx.clone();
+            let sub = Subscription {
+                tx,
+                payload: payload::signature_subscription(signature, id),
+                oneshot: true,
+                id,
+            };
+            let _ = con.send(sub).await;
 
-        // for transaction requests, potentially setup extra latency monitoring
-        if let Some(signature) = self.request_builder.signature() {
-            let mut signature_rx = None;
-            // If signature subscriptions are enabled,
-            // subscribe to the signature of the transaction.
-            if self.config.confirmations.subscribe_to_signatures {
-                let con = self.signatures_websocket.connection();
-                let tx = self.signature_confirmations.borrow().tx.clone();
-                let sub = Subscription {
-                    tx,
-                    payload: payload::signature_subscription(signature, id),
-                    oneshot: true,
-                    id,
-                };
-                let _ = con.send(sub).await;
-                signature_rx = if total_sync {
-                    Some(subscribe_with_sync(id, &self.signature_confirmations))
-                } else {
-                    subscribe_no_sync(id, &self.signature_confirmations);
-                    None
-                };
-            }
-
-            let account_rx = if !self.config.confirmations.subscribe_to_accounts {
+            if total_sync {
+                Some(subscribe_with_sync(id, &self.signature_confirmations))
+            } else {
+                subscribe_no_sync(id, &self.signature_confirmations);
                 None
-            } else if total_sync {
+            }
+        } else {
+            None
+        };
+
+        // Setup account subscription if enabled
+        let account_rx = if self.config.confirmations.subscribe_to_accounts {
+            if total_sync {
                 Some(subscribe_with_sync(id, &self.account_confirmations))
             } else {
                 subscribe_no_sync(id, &self.account_confirmations);
                 None
-            };
-            (account_rx, signature_rx)
+            }
         } else {
-            (None, None)
-        }
+            None
+        };
+
+        (account_rx, signature_rx)
     }
 }
 
