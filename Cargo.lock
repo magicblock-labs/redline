@@ -3571,6 +3571,7 @@ dependencies = [
  "redline-core",
  "redline-program",
  "serde",
+ "signal-hook 0.4.3",
  "solana-hash",
  "solana-instruction",
  "solana-keypair",
@@ -4221,6 +4222,16 @@ name = "signal-hook"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8621587d4798caf8eb44879d42e56b9a93ea5dcd315a6487c357130095b62801"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b57709da74f9ff9f4a27dce9526eec25ca8407c45a7887243b031a58935fb8e"
 dependencies = [
  "libc",
  "signal-hook-registry",
@@ -5372,7 +5383,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "signal-hook",
+ "signal-hook 0.3.17",
 ]
 
 [[package]]

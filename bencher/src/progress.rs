@@ -39,15 +39,24 @@ impl ProgressBar {
 
         loop {
             let current = self.progress.load(Ordering::Relaxed);
+            let shutdown = crate::SHUTDOWN.load(Ordering::Relaxed);
 
             // Once done, clear the line, print a final message, and show the cursor
-            if current >= self.total {
+            if current >= self.total || shutdown {
                 print!("\r\x1B[K"); // Clear the current line
-                tracing::info!(
-                    "✅ Benchmark Complete: {}/{} requests sent.",
-                    current,
-                    self.total
-                );
+                if shutdown {
+                    tracing::info!(
+                        "⚠️  Benchmark Interrupted: {}/{} requests sent.",
+                        current,
+                        self.total
+                    );
+                } else {
+                    tracing::info!(
+                        "✅ Benchmark Complete: {}/{} requests sent.",
+                        current,
+                        self.total
+                    );
+                }
                 print!("\x1B[?25h"); // Show the cursor again
                 stdout().flush().unwrap();
                 break;

@@ -11,10 +11,10 @@ use signer::Signer;
 use tokio::time::{sleep, Duration};
 use transaction::Transaction;
 
-const COMMIT_BATCH_SIZE: usize = 20;
+const COMMIT_BATCH_SIZE: usize = 4;
 const UNDELEGATION_WAIT_SECS: u64 = 10;
 const VERIFICATION_MAX_RETRIES: u32 = 5;
-const VERIFICATION_RETRY_DELAY_SECS: u64 = 5;
+const VERIFICATION_RETRY_DELAY_SECS: u64 = 20;
 
 /// Closes benchmark accounts and refunds rent to vault.
 pub async fn close(path: PathBuf) -> BenchResult<()> {
@@ -69,15 +69,40 @@ impl Closer {
     }
 
     async fn process_delegated_accounts(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
-        self.commit_and_undelegate(accounts).await?;
+        let payer = self.vault.pubkey();
+        let total_batches = (accounts.len() + COMMIT_BATCH_SIZE - 1) / COMMIT_BATCH_SIZE;
 
-        tracing::info!(
-            "waiting {} seconds for undelegation to finalize...",
-            UNDELEGATION_WAIT_SECS
-        );
-        sleep(Duration::from_secs(UNDELEGATION_WAIT_SECS)).await;
+        for (idx, batch) in accounts.chunks(COMMIT_BATCH_SIZE).enumerate() {
+            // Commit and undelegate this batch
+            let hash = self.ephem_client.get_latest_blockhash().await?;
+            let ix = self.build_commit_undelegate_ix(idx as u64, payer, batch);
+            let txn = Transaction::new_signed_with_payer(
+                &[ix],
+                Some(&payer),
+                &[&self.vault],
+                hash,
+            );
+            self.ephem_client.send_and_confirm_transaction(&txn).await?;
+            tracing::info!(
+                "batch {}/{}: committed and undelegated {} accounts",
+                idx + 1,
+                total_batches,
+                batch.len()
+            );
 
-        self.verify_undelegation(accounts).await?;
+            // Wait for undelegation to finalize
+            tracing::info!(
+                "waiting {} seconds for batch {} undelegation to finalize...",
+                UNDELEGATION_WAIT_SECS,
+                idx + 1
+            );
+            sleep(Duration::from_secs(UNDELEGATION_WAIT_SECS)).await;
+
+            // Verify this batch is undelegated
+            self.verify_undelegation(batch).await?;
+        }
+
+        tracing::info!("all batches committed and undelegated successfully");
         self.close_on_chain(accounts).await
     }
 
@@ -111,52 +136,6 @@ impl Closer {
         ))
     }
 
-    async fn commit_and_undelegate(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
-        tracing::info!(
-            "committing and undelegating {} accounts on ephemeral chain",
-            accounts.len()
-        );
-
-        let payer = self.vault.pubkey();
-        let total_batches = (accounts.len() + COMMIT_BATCH_SIZE - 1) / COMMIT_BATCH_SIZE;
-
-        crate::common::run_concurrent(
-            accounts
-                .chunks(COMMIT_BATCH_SIZE)
-                .enumerate()
-                .map(|(idx, batch)| {
-                    let this = self.clone();
-                    let batch = batch.to_vec();
-
-                    move || async move {
-                        let hash = this.ephem_client.get_latest_blockhash().await?;
-                        let ix = this.build_commit_undelegate_ix(idx as u64, payer, &batch);
-                        let txn = Transaction::new_signed_with_payer(
-                            &[ix],
-                            Some(&payer),
-                            &[&this.vault],
-                            hash,
-                        );
-
-                        this.ephem_client.send_and_confirm_transaction(&txn).await?;
-                        tracing::info!(
-                            "batch {}/{}: committed and undelegated {} accounts",
-                            idx + 1,
-                            total_batches,
-                            batch.len()
-                        );
-                        Ok(())
-                    }
-                }),
-        )
-        .await?;
-
-        tracing::info!(
-            "successfully committed and undelegated all {} accounts",
-            accounts.len()
-        );
-        Ok(())
-    }
 
     async fn verify_undelegation(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
         for retry in 0..VERIFICATION_MAX_RETRIES {

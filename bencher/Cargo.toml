@@ -38,6 +38,7 @@ base64 = "0.22"
 zstd = "0.13"
 
 rand = { workspace = true }
+signal-hook = "0.4"
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

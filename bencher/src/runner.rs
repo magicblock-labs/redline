@@ -181,6 +181,12 @@ impl BenchRunner {
     pub async fn run(mut self) -> BenchResults {
         self.rate_manager.reset();
         for i in 0..self.config.benchmark.iterations {
+            // Check for shutdown signal
+            if crate::SHUTDOWN.load(Ordering::Relaxed) {
+                tracing::info!("Shutdown requested, stopping benchmark gracefully...");
+                break;
+            }
+
             // This will trigger an account update on the main chain, which in turn
             // will trigger an account clone on the Ephemeral Rollup.
             self.transfer_manager.transfer();

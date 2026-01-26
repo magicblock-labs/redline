@@ -3,7 +3,10 @@ use std::{
     fs::{self, File},
     path::PathBuf,
     rc::Rc,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc,
+    },
     thread::{self, JoinHandle},
     time::SystemTime,
 };
@@ -11,11 +14,14 @@ use std::{
 use json::writer::BufferedWriter;
 use keypair::Keypair;
 use runner::BenchRunner;
+use signal_hook::{consts::*, low_level};
 use signer::EncodableKey;
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 use tracing_subscriber::EnvFilter;
 
 use crate::progress::ProgressBar;
+
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 /// # Main Entry Point
 ///
@@ -33,9 +39,13 @@ fn main() -> BenchResult<()> {
         .map(|n| Keypair::read_from_file(config.keypairs.join(format!("{n}.json"))))
         .collect::<BenchResult<_>>()?;
 
+    // Set up signal handlers for graceful shutdown
+    setup_signal_handlers()?;
+
     let mut handles = Vec::new();
     // Create a shared atomic counter for tracking progress.
     let progress = Arc::new(AtomicU64::new(0));
+
     // Create and start the progress bar.
     let progress_bar = ProgressBar::new(
         config.benchmark.iterations * config.parallelism as u64,
@@ -76,21 +86,33 @@ fn main() -> BenchResult<()> {
     let stats = BenchStatistics::merge(stats);
 
     // Write the aggregated results to a JSON file
-    let output = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+    let ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs();
     let outdir = PathBuf::from("runs");
     let _ = fs::create_dir(&outdir);
-    let output = outdir.join(format!("redline-{:0>12}.json", output.as_secs()));
-    let writer = File::options()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&output)
-        .map(BufferedWriter::new)?;
+    let output = outdir.join(format!("redline-{ts:0>12}.json"));
+    let writer = File::create(&output).map(BufferedWriter::new)?;
     json::to_writer(writer, &stats)?;
-    tracing::info!(
-        "The results of the benchmark are written to {}",
-        output.display()
-    );
+
+    if SHUTDOWN.load(Ordering::Relaxed) {
+        tracing::warn!(
+            "Interrupted - partial results saved to {}",
+            output.display()
+        );
+    } else {
+        tracing::info!("Results written to {}", output.display());
+    }
+
+    Ok(())
+}
+
+/// Sets up signal handlers for graceful shutdown on SIGTERM/SIGINT
+fn setup_signal_handlers() -> BenchResult<()> {
+    unsafe {
+        low_level::register(SIGTERM, || SHUTDOWN.store(true, Ordering::Relaxed))?;
+        low_level::register(SIGINT, || SHUTDOWN.store(true, Ordering::Relaxed))?;
+    }
     Ok(())
 }
 
