@@ -22,6 +22,7 @@ pubkey = { workspace = true }
 instruction = { workspace = true }
 transaction = { workspace = true }
 systransaction = { workspace = true }
+sdk = { workspace = true }
 solana-system-interface = { version = "1", features = ["bincode"] }
 
 

@@ -12,6 +12,8 @@ use std::path::PathBuf;
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
+    /// Indicates whether ER is running in gasless mode
+    pub gasless: bool,
     /// ## Connection Settings
     ///
     /// Defines the network parameters for connecting to the Solana cluster.

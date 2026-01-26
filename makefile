@@ -26,6 +26,9 @@ bench-report: bench report
 prepare: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) prepare $(CONFIG)
 
+close: $(REDLINE_ASSIST)
+	@$(REDLINE_ASSIST) close $(CONFIG)
+
 clean: $(REDLINE_ASSIST)
 	@$(REDLINE_ASSIST) cleanup
 

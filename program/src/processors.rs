@@ -18,9 +18,10 @@
 //! 1. The transaction is signed by the owner
 //! 2. The signer's pubkey matches the stored owner pubkey
 
+use borsh::BorshDeserialize;
 use pubkey::Pubkey;
 use sdk::{
-    cpi::{DelegateAccounts, DelegateConfig},
+    cpi::{undelegate_account, DelegateAccounts, DelegateConfig, UndelegateAccounts},
     utils::create_pda,
 };
 use sha2::{Digest, Sha256};
@@ -29,6 +30,7 @@ use solana_program::{
     entrypoint::ProgramResult,
     msg,
     program_error::ProgramError,
+    system_program,
 };
 
 /// Size of the owner pubkey stored at the start of each account (in bytes).
@@ -74,7 +76,7 @@ fn verify_account_owner(
         .map_err(|_| ProgramError::InvalidAccountData)?;
 
     // Verify the signer matches the stored owner
-    if stored_owner != *signer.key {
+    if stored_owner != *signer.key && stored_owner != Pubkey::default() {
         msg!(
             "Error: Signer {} does not match stored owner {}",
             signer.key,
@@ -344,6 +346,23 @@ pub fn commit_accounts(iter: &mut std::slice::Iter<AccountInfo>, id: u64) -> Pro
     Ok(())
 }
 
+/// # Commit And Undelegate Accounts
+///
+/// Commits a list of accounts to the base chain and undelegate them
+pub fn commit_undelegate_accounts(
+    iter: &mut std::slice::Iter<AccountInfo>,
+    id: u64,
+) -> ProgramResult {
+    let payer = next_account_info(iter)?;
+    let magic_context = next_account_info(iter)?;
+    let magic_program = next_account_info(iter)?;
+    let accounts: Vec<_> = iter.collect();
+    let count = accounts.len();
+    sdk::ephem::commit_and_undelegate_accounts(payer, accounts, magic_context, magic_program)?;
+    msg!("commit-undelegated {} accounts to chain txn: {}", count, id);
+    Ok(())
+}
+
 /// # Close Account
 ///
 /// Closes an account and refunds the rent to the owner.
@@ -356,11 +375,18 @@ pub fn close_account(iter: &mut std::slice::Iter<AccountInfo>) -> ProgramResult 
     verify_account_owner(owner, account_to_close)?;
 
     // Transfer all lamports to the owner (closing the account)
-    let dest_starting_lamports = owner.lamports();
-    **owner.lamports.borrow_mut() = dest_starting_lamports
-        .checked_add(account_to_close.lamports())
-        .ok_or(ProgramError::ArithmeticOverflow)?;
+    let lamports_to_transfer = account_to_close.lamports();
     **account_to_close.lamports.borrow_mut() = 0;
+    **owner.lamports.borrow_mut() = owner
+        .lamports()
+        .checked_add(lamports_to_transfer)
+        .ok_or(ProgramError::ArithmeticOverflow)?;
+
+    // Assign the account back to the System Program
+    account_to_close.assign(&system_program::ID);
+
+    // Clear the account data
+    account_to_close.realloc(0, false)?;
 
     msg!(
         "closed account {} and refunded rent to {}",
@@ -368,4 +394,14 @@ pub fn close_account(iter: &mut std::slice::Iter<AccountInfo>) -> ProgramResult 
         owner.key
     );
     Ok(())
+}
+
+pub fn undelegate(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    let account_seeds = <Vec<Vec<u8>>>::try_from_slice(data).map_err(|err| {
+        msg!("ERROR: failed to parse account seeds {:?}", err);
+        ProgramError::InvalidArgument
+    })?;
+    let accounts = UndelegateAccounts::try_from_accounts(accounts, &crate::ID)?;
+
+    undelegate_account(accounts, account_seeds)
 }

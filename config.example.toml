@@ -3,6 +3,10 @@
 # This file contains the configuration for the Redline benchmark tool.
 # It is divided into several sections, each controlling a specific aspect of the benchmark.
 
+# Indicates whether the ER is running in gasless mode
+# This affects whether the payers/signers need to be funded during prepare step 
+gasless = true
+
 # ## Parallelism
 #
 # Indicates how many concurrent benchmarks to run.
@@ -85,8 +89,6 @@ mode = { mixed = [
 # Redline supports a variety of benchmark modes, which can be combined in a mixed workload.
 #
 # #### Transaction-Based Modes
-#
-# All TPS modes now require the accounts-per-transaction parameter.
 #
 # - **simple-byte-set**: Writes a small set of bytes to multiple accounts.
 #   mode = { simple-byte-set = { accounts-per-transaction = 8 } }

@@ -12,6 +12,8 @@ pub enum Instruction {
     ///
     /// Commits a list of accounts to the base chain, effectively finalizing their state.
     CommitAccounts { id: u64 },
+    /// Commit and undelegate list of accounts
+    CommitAndUndelegateAccounts { id: u64 },
     /// ## Initialize Account
     ///
     /// Initializes a new Program Derived Address (PDA) with a specified size and seed.

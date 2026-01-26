@@ -1,5 +1,6 @@
 #![allow(unexpected_cfgs)]
 
+use sdk::consts::EXTERNAL_UNDELEGATE_DISCRIMINATOR;
 use solana_program::{
     account_info::AccountInfo,
     declare_id,
@@ -28,6 +29,15 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
+    // Handle potential undelegation
+    if instruction_data.len() >= EXTERNAL_UNDELEGATE_DISCRIMINATOR.len() {
+        let (disc, data) = instruction_data.split_at(EXTERNAL_UNDELEGATE_DISCRIMINATOR.len());
+
+        if disc == EXTERNAL_UNDELEGATE_DISCRIMINATOR {
+            return undelegate(accounts, data);
+        }
+    }
+
     let instruction: Instruction = bincode::deserialize(instruction_data).map_err(|err| {
         msg!("failed to bincode deserialize instruction data: {}", err);
         ProgramError::InvalidInstructionData
@@ -61,6 +71,9 @@ fn process_instruction(
         Instruction::ReadAccountsData { id } => read_accounts_data(&mut iter, id)?,
         Instruction::CommitAccounts { id } => {
             commit_accounts(&mut iter, id)?;
+        }
+        Instruction::CommitAndUndelegateAccounts { id } => {
+            commit_undelegate_accounts(&mut iter, id)?;
         }
         Instruction::CloseAccount => {
             close_account(&mut iter)?;

@@ -5,9 +5,11 @@ use program::utils::derive_pda;
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
 use signer::{EncodableKey, Signer};
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
+use tokio::task::LocalSet;
 
 const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
+const MAX_CONCURRENT_REQUESTS: usize = 8;
 
 /// # Load Vault Keypair
 ///
@@ -78,4 +80,50 @@ pub fn iter_pdas(
             (pk, bump, seed, kp.insecure_clone())
         })
     })
+}
+
+/// Executes tasks concurrently with a maximum of 8 inflight requests at a time.
+/// Returns the first error encountered, or Ok(()) if all tasks succeed.
+pub async fn run_concurrent<F, Fut>(tasks: impl IntoIterator<Item = F>) -> BenchResult<()>
+where
+    F: FnOnce() -> Fut + 'static,
+    Fut: std::future::Future<Output = BenchResult<()>> + 'static,
+{
+    let error = Rc::new(RefCell::new(None));
+    let mut tasks = tasks.into_iter();
+
+    loop {
+        let local = LocalSet::new();
+        let mut has_tasks = false;
+
+        for task in tasks.by_ref().take(MAX_CONCURRENT_REQUESTS) {
+            has_tasks = true;
+            let error = error.clone();
+            let fut = async move {
+                if let Err(e) = task().await {
+                    tracing::error!("{}", e);
+                    if error.borrow().is_none() {
+                        *error.borrow_mut() = Some(e.to_string());
+                    }
+                }
+            };
+            local.spawn_local(fut);
+        }
+
+        if !has_tasks {
+            break;
+        }
+
+        local.await;
+
+        if error.borrow().is_some() {
+            break;
+        }
+    }
+
+    if let Some(err) = error.borrow().as_ref() {
+        return Err(err.clone().into());
+    }
+
+    Ok(())
 }

@@ -3591,6 +3591,7 @@ name = "redline-assist"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "ephemeral-rollups-sdk",
  "magicblock-delegation-program 1.0.0",
  "prettytable",
  "redline-core",
@@ -3632,6 +3633,7 @@ name = "redline-program"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "borsh 1.5.7",
  "ephemeral-rollups-sdk",
  "serde",
  "sha2 0.10.8",

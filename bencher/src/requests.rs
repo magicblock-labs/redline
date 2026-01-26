@@ -127,7 +127,6 @@ where
     }
 }
 
-
 /// # Get Multiple Accounts Request Builder
 ///
 /// A request builder that generates `getMultipleAccounts` RPC requests.
