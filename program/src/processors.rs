@@ -128,18 +128,14 @@ pub fn init_account(
 /// Delegates a PDA to the Ephemeral Rollup (ER) program.
 /// Only the account owner can delegate.
 pub fn delegate_account(accs: &[AccountInfo], seed: u8, authority: Pubkey) -> ProgramResult {
-    let owner = accs
-        .first()
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+    let owner = accs.first().ok_or(ProgramError::NotEnoughAccountKeys)?;
 
     let accounts = DelegateAccounts::try_from(accs)?;
 
     // Verify ownership before delegating
     verify_account_owner(owner, accounts.pda)?;
 
-    let base = accs
-        .last()
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+    let base = accs.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
     let mut seeds = (accounts.pda.data_len() as u32).to_le_bytes().to_vec();
     seeds.push(seed);
     seeds.extend_from_slice(&authority.as_ref()[..16]);

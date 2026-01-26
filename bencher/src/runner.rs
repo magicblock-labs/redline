@@ -233,7 +233,7 @@ impl BenchRunner {
         tokio::task::spawn_local(async move {
             match response.resolve().await {
                 Ok(Some(false)) => tracing::warn!(id, "request failed to be executed"),
-                Err(_) => tracing::error!(id, "request failed to be delivered"),
+                Err(error) => tracing::error!(id, %error, "request failed to be delivered"),
                 _ => (),
             }
             // Observe the delivery of the request.

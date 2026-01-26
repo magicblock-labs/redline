@@ -183,7 +183,7 @@ impl DerefMut for ConnectionGuard<'_> {
 impl Drop for ConnectionGuard<'_> {
     fn drop(&mut self) {
         if let Some(con) = self.con.take() {
-            self.pool.ready.push_back(con);
+            self.pool.busy.push_back(con);
         }
     }
 }

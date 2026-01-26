@@ -13,7 +13,7 @@ const CONFIRMED: CommitmentConfig = CommitmentConfig::confirmed();
 ///
 /// Loads the vault keypair from the configured keypairs directory.
 pub fn load_vault(config: &Config) -> BenchResult<Keypair> {
-    let path = format!("{}vault.json", config.keypairs.display());
+    let path = format!("{}/vault.json", config.keypairs.display());
     Keypair::read_from_file(&path).map_err(|e| {
         format!("failed to read vault keypair from {path}, did you run `prepare` first? Error: {e}")
             .into()
@@ -28,8 +28,8 @@ pub fn load_payers(config: &Config) -> BenchResult<Vec<Keypair>> {
     let count = config.payers * config.parallelism;
     let mut keypairs = Vec::with_capacity(count as usize);
 
-    for i in 0..count {
-        let path = format!("{}payer-{i}.json", config.keypairs.display());
+    for i in 1..=count {
+        let path = format!("{}/{i}.json", config.keypairs.display());
         let keypair = Keypair::read_from_file(&path).map_err(|e| {
             format!(
                 "failed to read payer keypair from {path}, did you run `prepare` first? Error: {e}"
