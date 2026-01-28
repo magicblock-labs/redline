@@ -18,7 +18,6 @@ use solana_system_interface::instruction as sysinstruction;
 use transaction::Transaction;
 
 const BENCH_FUNDING: u64 = 200_000_000; // 0.2 SOL
-const VAULT_AIRDROP: u64 = 5_000_000_000; // 5 SOL
 
 /// Prepares the benchmark environment.
 pub async fn prepare(path: PathBuf) -> BenchResult<()> {
@@ -47,8 +46,6 @@ impl Preparator {
         let keypairs = crate::common::load_payers(config)?;
         let client = crate::common::create_chain_client(config);
 
-        Self::ensure_vault_funded(&client, &vault).await?;
-
         Ok(Self {
             config: config.clone(),
             vault,
@@ -56,17 +53,6 @@ impl Preparator {
             keypairs,
         }
         .into())
-    }
-
-    async fn ensure_vault_funded(client: &RpcClient, vault: &Keypair) -> BenchResult<()> {
-        let lamports = client.get_balance(&vault.pubkey()).await?;
-        if lamports < VAULT_AIRDROP / 2 {
-            tracing::info!("airdropping {} lamports to vault", VAULT_AIRDROP);
-            client
-                .request_airdrop(&vault.pubkey(), VAULT_AIRDROP)
-                .await?;
-        }
-        Ok(())
     }
 
     fn generate_keypairs(config: &Config) -> BenchResult<()> {
