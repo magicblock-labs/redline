@@ -19,3 +19,4 @@ tracing = { workspace = true }
 rand = { workspace = true }
 toml = "0.8"
 serde_with = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

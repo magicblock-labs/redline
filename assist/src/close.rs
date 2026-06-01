@@ -19,7 +19,16 @@ const VERIFICATION_RETRY_DELAY_SECS: u64 = 20;
 /// Closes benchmark accounts and refunds rent to vault.
 pub async fn close(path: PathBuf) -> BenchResult<()> {
     tracing::info!("using config file at {path:?} to close benchmark accounts");
-    let config = Config::from_path(path)?;
+    let mut config = Config::from_path(path)?;
+    // The close flow talks to the ephemeral rollup; if it is a TEE, authenticate
+    // and append the session token to the ephemeral URL before connecting.
+    let vault = crate::common::load_vault(&config)?;
+    core::auth::authenticate_tee(
+        &mut config.connection,
+        &vault.pubkey().to_string(),
+        |message| vault.sign_message(message).to_string(),
+    )
+    .await?;
     let closer = Closer::new(&config).await?;
     closer.close_accounts().await
 }
