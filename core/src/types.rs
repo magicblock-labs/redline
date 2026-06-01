@@ -120,6 +120,24 @@ impl Url {
     pub fn host(&self) -> &str {
         self.0.host().expect("uri has no host")
     }
+
+    /// Returns the `scheme://authority` origin of the URL, without any path or query.
+    pub fn origin(&self) -> String {
+        let scheme = self.0.scheme_str().unwrap_or("http");
+        let authority = self.0.authority().map(|a| a.as_str()).unwrap_or_default();
+        format!("{scheme}://{authority}")
+    }
+
+    /// Returns a copy of the URL with the given auth `token` appended as a query parameter.
+    pub fn with_token(&self, token: &str) -> BenchResult<Self> {
+        let path = self.0.path();
+        let path_and_query = match self.0.query() {
+            Some(query) if !query.is_empty() => format!("{path}?{query}&token={token}"),
+            _ => format!("{path}?token={token}"),
+        };
+        let full = format!("{}{path_and_query}", self.origin());
+        full.parse::<hyper::Uri>().map(Url).map_err(Into::into)
+    }
 }
 
 impl<'de> Deserialize<'de> for Url {

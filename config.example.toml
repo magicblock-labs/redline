@@ -49,6 +49,11 @@ http-connection-type = "http2"
 http-connections-count = 16
 # Maximum number of WebSocket connections to establish.
 ws-connections-count = 16
+# Whether the ephemeral rollup is a Private Ephemeral Rollup (PER) running in a TEE.
+# When true, the authentication flow runs automatically during setup to obtain a
+# session token, which is appended to `ephem-url` as a `?token=...` query parameter.
+# The vault keypair is used as the authenticating identity.
+tee = false
 
 # ## Benchmark Settings
 #

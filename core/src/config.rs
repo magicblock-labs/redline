@@ -93,6 +93,12 @@ pub struct ConnectionSettings {
     pub http_connections_count: usize,
     /// The maximum number of WebSocket connections to establish.
     pub ws_connections_count: usize,
+    /// Whether the ephemeral rollup is a Private Ephemeral Rollup running in a TEE.
+    ///
+    /// When `true`, the PER authentication flow runs during setup to obtain a
+    /// session token, which is automatically appended to `ephem_url`.
+    #[serde(default)]
+    pub tee: bool,
 }
 
 /// # Benchmark Settings

@@ -19,8 +19,16 @@ const VERIFICATION_RETRY_DELAY_SECS: u64 = 20;
 /// Closes benchmark accounts and refunds rent to vault.
 pub async fn close(path: PathBuf) -> BenchResult<()> {
     tracing::info!("using config file at {path:?} to close benchmark accounts");
-    let config = Config::from_path(path)?;
+    let mut config = Config::from_path(path)?;
     let closer = Closer::new(&config).await?;
+    // The close flow talks to the ephemeral rollup; if it is a TEE, authenticate
+    // and append the session token to the ephemeral URL before connecting.
+    core::auth::authenticate_tee(
+        &mut config.connection,
+        &closer.vault.pubkey().to_string(),
+        |message| closer.vault.sign_message(message).to_string(),
+    )
+    .await?;
     closer.close_accounts().await
 }
 
@@ -70,18 +78,13 @@ impl Closer {
 
     async fn process_delegated_accounts(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
         let payer = self.vault.pubkey();
-        let total_batches = (accounts.len() + COMMIT_BATCH_SIZE - 1) / COMMIT_BATCH_SIZE;
+        let total_batches = accounts.len().div_ceil(COMMIT_BATCH_SIZE);
 
         for (idx, batch) in accounts.chunks(COMMIT_BATCH_SIZE).enumerate() {
             // Commit and undelegate this batch
             let hash = self.ephem_client.get_latest_blockhash().await?;
             let ix = self.build_commit_undelegate_ix(idx as u64, payer, batch);
-            let txn = Transaction::new_signed_with_payer(
-                &[ix],
-                Some(&payer),
-                &[&self.vault],
-                hash,
-            );
+            let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&self.vault], hash);
             self.ephem_client.send_and_confirm_transaction(&txn).await?;
             tracing::info!(
                 "batch {}/{}: committed and undelegated {} accounts",
@@ -135,7 +138,6 @@ impl Closer {
             Rc::try_unwrap(non_delegated).unwrap().into_inner(),
         ))
     }
-
 
     async fn verify_undelegation(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
         for retry in 0..VERIFICATION_MAX_RETRIES {

@@ -15,7 +15,7 @@ use json::writer::BufferedWriter;
 use keypair::Keypair;
 use runner::BenchRunner;
 use signal_hook::{consts::*, low_level};
-use signer::EncodableKey;
+use signer::{EncodableKey, Signer};
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 use tracing_subscriber::EnvFilter;
 
@@ -34,7 +34,10 @@ fn main() -> BenchResult<()> {
         .init();
 
     // Load the configuration from command-line arguments
-    let config = Config::from_args()?;
+    let mut config = Config::from_args()?;
+    // If the ephemeral rollup is a TEE, run the PER auth flow and append the
+    // resulting session token to the ephemeral URL before any connection is made.
+    authenticate_tee(&mut config)?;
     let keypairs: Vec<_> = (1..=config.payers * config.parallelism)
         .map(|n| Keypair::read_from_file(config.keypairs.join(format!("{n}.json"))))
         .collect::<BenchResult<_>>()?;
@@ -105,6 +108,25 @@ fn main() -> BenchResult<()> {
     }
 
     Ok(())
+}
+
+/// Runs the PER (TEE) authentication flow if the config marks the ephemeral
+/// rollup as a TEE, appending the obtained session token to the ephemeral URL.
+/// The vault keypair is used as the authenticating identity.
+fn authenticate_tee(config: &mut Config) -> BenchResult<()> {
+    if !config.connection.tee {
+        return Ok(());
+    }
+    let vault = Keypair::read_from_file(config.keypairs.join("vault.json"))?;
+    let pubkey = vault.pubkey().to_string();
+    let rt = runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    rt.block_on(core::auth::authenticate_tee(
+        &mut config.connection,
+        &pubkey,
+        |message| vault.sign_message(message).to_string(),
+    ))
 }
 
 /// Sets up signal handlers for graceful shutdown on SIGTERM/SIGINT
