@@ -20,16 +20,15 @@ const VERIFICATION_RETRY_DELAY_SECS: u64 = 20;
 pub async fn close(path: PathBuf) -> BenchResult<()> {
     tracing::info!("using config file at {path:?} to close benchmark accounts");
     let mut config = Config::from_path(path)?;
+    let closer = Closer::new(&config).await?;
     // The close flow talks to the ephemeral rollup; if it is a TEE, authenticate
     // and append the session token to the ephemeral URL before connecting.
-    let vault = crate::common::load_vault(&config)?;
     core::auth::authenticate_tee(
         &mut config.connection,
-        &vault.pubkey().to_string(),
-        |message| vault.sign_message(message).to_string(),
+        &closer.vault.pubkey().to_string(),
+        |message| closer.vault.sign_message(message).to_string(),
     )
     .await?;
-    let closer = Closer::new(&config).await?;
     closer.close_accounts().await
 }
 
@@ -85,12 +84,7 @@ impl Closer {
             // Commit and undelegate this batch
             let hash = self.ephem_client.get_latest_blockhash().await?;
             let ix = self.build_commit_undelegate_ix(idx as u64, payer, batch);
-            let txn = Transaction::new_signed_with_payer(
-                &[ix],
-                Some(&payer),
-                &[&self.vault],
-                hash,
-            );
+            let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&self.vault], hash);
             self.ephem_client.send_and_confirm_transaction(&txn).await?;
             tracing::info!(
                 "batch {}/{}: committed and undelegated {} accounts",
@@ -144,7 +138,6 @@ impl Closer {
             Rc::try_unwrap(non_delegated).unwrap().into_inner(),
         ))
     }
-
 
     async fn verify_undelegation(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
         for retry in 0..VERIFICATION_MAX_RETRIES {
