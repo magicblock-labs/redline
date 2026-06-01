@@ -5,9 +5,13 @@
 //! signs it, exchanges the signature for a session token, and appends that token
 //! to the RPC URL as a `token` query parameter.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{config::ConnectionSettings, types::BenchResult};
+
+const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Deserialize)]
 struct ChallengeResponse {
@@ -37,7 +41,7 @@ pub async fn fetch_auth_token(
     pubkey: &str,
     sign_base58: impl FnOnce(&[u8]) -> String,
 ) -> BenchResult<String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder().timeout(AUTH_TIMEOUT).build()?;
 
     // 1. Request a challenge for this pubkey.
     let challenge: ChallengeResponse = client
