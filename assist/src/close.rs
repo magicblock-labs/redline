@@ -78,7 +78,7 @@ impl Closer {
 
     async fn process_delegated_accounts(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
         let payer = self.vault.pubkey();
-        let total_batches = (accounts.len() + COMMIT_BATCH_SIZE - 1) / COMMIT_BATCH_SIZE;
+        let total_batches = accounts.len().div_ceil(COMMIT_BATCH_SIZE);
 
         for (idx, batch) in accounts.chunks(COMMIT_BATCH_SIZE).enumerate() {
             // Commit and undelegate this batch
