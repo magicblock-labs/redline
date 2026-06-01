@@ -29,7 +29,6 @@ struct LoginRequest<'a> {
 #[derive(Deserialize)]
 struct LoginResponse {
     token: Option<String>,
-    error: Option<String>,
 }
 
 /// Runs the PER auth flow against `base_url` and returns a session token.
@@ -71,12 +70,12 @@ pub async fn fetch_auth_token(
         })
         .send()
         .await?;
-    let succeeded = response.status().is_success();
-    let login: LoginResponse = response.json().await?;
-    if !succeeded {
-        let error = login.error.unwrap_or_else(|| "unknown error".into());
-        return Err(format!("TEE authentication failed: {error}").into());
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("TEE authentication failed: {status} - {body}").into());
     }
+    let login: LoginResponse = response.json().await?;
     login
         .token
         .filter(|t| !t.is_empty())
