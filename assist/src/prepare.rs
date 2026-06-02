@@ -2,7 +2,7 @@ use core::{config::Config, types::BenchResult};
 use std::{
     cell::RefCell, collections::HashSet, fs, hash::Hash, ops::AddAssign, path::PathBuf, rc::Rc,
 };
-
+use std::default::Default;
 use commitment::CommitmentConfig;
 use decoder_types::UiAccountEncoding;
 use dlp::{args::DelegateArgs, instruction_builder::delegate};
@@ -14,7 +14,10 @@ use program::{
 };
 use pubkey::Pubkey;
 use rpc::nonblocking::rpc_client::RpcClient;
+use rpc::rpc_client::SerializableTransaction;
 use rpc_types::config::RpcAccountInfoConfig;
+use rpc_types::config::RpcSendTransactionConfig;
+
 use signer::{EncodableKey, Signer};
 use solana_system_interface::instruction as sysinstruction;
 use tokio::task::LocalSet;
@@ -74,6 +77,7 @@ impl Preparator {
             tracing::info!("Airdropping {FIVE_SOL} SOL to vault");
             client.request_airdrop(pk, FIVE_SOL).await?;
         }
+        tracing::info!("Airdropped");
 
         Ok(Self {
             config: config.clone(),
@@ -143,6 +147,7 @@ impl Preparator {
         let count = accounts.len();
         let local = LocalSet::new();
 
+        println!("{}", 1);
         let counter = Rc::new(RefCell::new(0u32));
         for pda in accounts {
             let counter = counter.clone();
@@ -162,7 +167,7 @@ impl Preparator {
                     .value;
                 if response.is_none() {
                     this.create_and_delegate_pda(&pda).await.inspect_err(
-                        |err| tracing::error!(%err, "failed to create/delegate PDA"),
+                        |err| tracing::error!("failed to create/delegate PDA: {:?}", err),
                     )?;
                 }
                 counter.borrow_mut().add_assign(1);
@@ -214,7 +219,15 @@ impl Preparator {
         let delegate_ix = SolanaInstruction::new_with_bincode(program::id(), &ix, metas);
         let ixs = [init_ix, delegate_ix];
         let txn = Transaction::new_signed_with_payer(&ixs, Some(&payer), &[&self.vault], hash);
-        self.client.send_and_confirm_transaction(&txn).await?;
+        self.client.send_and_confirm_transaction_with_spinner_and_config(
+            &txn,
+            self.client.commitment(),
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+                ..Default::default()
+            },
+        ).await?;
+        tracing::info!("trtr");
         Ok(())
     }
 
@@ -279,7 +292,14 @@ impl Preparator {
     async fn transfer(&self, to: &Pubkey, amount: u64) -> BenchResult<()> {
         let hash = self.client.get_latest_blockhash().await?;
         let txn = systransaction::transfer(&self.vault, to, amount, hash);
-        self.client.send_and_confirm_transaction(&txn).await?;
+        self.client.send_and_confirm_transaction_with_spinner_and_config(
+            &txn,
+            self.client.commitment(),
+            RpcSendTransactionConfig {
+                skip_preflight: true,
+                ..Default::default()
+            },
+        ).await?;
         Ok(())
     }
 }

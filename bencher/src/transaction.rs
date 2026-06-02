@@ -177,6 +177,27 @@ impl TransactionProvider for CommitProvider {
         self.wrap_ix(ix, accounts)
     }
 
+    fn generate(&mut self, id: u64, blockhash: Hash, signer: &Keypair) -> Transaction {
+        let ix = Instruction::CommitAccounts { id };
+        let mut accounts = vec![
+            AccountMeta::new(signer.pubkey(), true),
+            AccountMeta::new(MAGIC_CONTEXT_ID, false),
+            AccountMeta::new_readonly(MAGIC_PROGRAM_ID, false),
+        ];
+        // Randomly selects a set of accounts to be committed.
+        accounts.extend(
+            self.accounts
+                .choose_multiple(&mut self.rng, self.count)
+                .copied()
+                .map(|acc| AccountMeta::new_readonly(acc, false)),
+        );
+        let ix = self.wrap_ix(ix, accounts);
+
+        let mut tx = Transaction::new_with_payer(&[ix], Some(&signer.pubkey()));
+        tx.sign(&[signer], blockhash);
+        tx
+    }
+
     fn accounts(&self) -> Vec<Pubkey> {
         self.accounts.clone()
     }
