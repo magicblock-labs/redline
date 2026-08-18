@@ -35,7 +35,7 @@ fn main() -> BenchResult<()> {
 
     // Load the configuration from command-line arguments
     let config = Config::from_args()?;
-    let keypairs: Vec<_> = (1..=config.payers * config.parallelism)
+    let keypairs: Vec<_> = (1..=usize::from(config.payers) * usize::from(config.parallelism))
         .map(|n| Keypair::read_from_file(config.keypairs.join(format!("{n}.json"))))
         .collect::<BenchResult<_>>()?;
 

@@ -62,7 +62,7 @@ impl Preparator {
             fs::create_dir(keypath)?;
         }
 
-        for n in 1..=config.parallelism * config.payers {
+        for n in 1..=usize::from(config.parallelism) * usize::from(config.payers) {
             let path = keypath.join(format!("{n}.json"));
             if !fs::exists(&path)? {
                 Keypair::new().write_to_file(path)?;

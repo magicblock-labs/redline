@@ -27,8 +27,8 @@ pub fn load_vault(config: &Config) -> BenchResult<Keypair> {
 /// Loads all benchmark payer keypairs (base accounts for PDA derivation).
 /// These are NOT used as signers outside benchmarking, only for deriving PDA addresses.
 pub fn load_payers(config: &Config) -> BenchResult<Vec<Keypair>> {
-    let count = config.payers * config.parallelism;
-    let mut keypairs = Vec::with_capacity(count as usize);
+    let count = usize::from(config.payers) * usize::from(config.parallelism);
+    let mut keypairs = Vec::with_capacity(count);
 
     for i in 1..=count {
         let path = format!("{}/{i}.json", config.keypairs.display());
