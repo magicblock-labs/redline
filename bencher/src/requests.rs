@@ -7,7 +7,6 @@ use keypair::Keypair;
 use program::utils::derive_pda;
 use pubkey::Pubkey;
 use signature::Signature;
-use signer::Signer;
 use std::collections::HashSet;
 
 use crate::{
@@ -197,16 +196,26 @@ pub fn make_builder(
     mode: &BenchMode,
     config: &Config,
     signers: Vec<Keypair>,
+    account_base: Pubkey,
+    worker: usize,
     blockhash_provider: BlockHashProvider,
 ) -> Box<dyn RequestBuilder> {
-    let base = signers
-        .first()
-        .expect("should have at least 1 payer")
-        .pubkey();
     let space = config.data.account_size as u32;
     let encoding = config.data.account_encoding;
-    let accounts: Vec<Pubkey> = (1..=config.benchmark.accounts_count)
-        .map(|seed| derive_pda(base, space, seed, config.authority).0)
+    let parallelism = usize::from(config.parallelism);
+    let accounts = usize::from(config.benchmark.accounts_count);
+    let start = accounts * worker / parallelism;
+    let end = accounts * (worker + 1) / parallelism;
+    let accounts: Vec<Pubkey> = (start..end)
+        .map(|index| {
+            derive_pda(
+                account_base,
+                space,
+                u16::try_from(index + 1).expect("account index should fit in u16"),
+                config.authority,
+            )
+            .0
+        })
         .collect();
     match mode {
         BenchMode::GetAccountInfo => Box::new(RpcRequestBuilder::new(
@@ -233,7 +242,10 @@ pub fn make_builder(
                 .map(|m| {
                     let signers = signers.iter().map(|k| k.insecure_clone()).collect();
                     let blockhash = blockhash_provider.clone();
-                    (make_builder(&m.mode, config, signers, blockhash), m.weight)
+                    (
+                        make_builder(&m.mode, config, signers, account_base, worker, blockhash),
+                        m.weight,
+                    )
                 })
                 .unzip();
             let distribution = WeightedIndex::new(weights).unwrap();

@@ -104,7 +104,7 @@ fn init_account_ix(
     payer: &Keypair,
     key: &Pubkey,
     space: u32,
-    seed: u8,
+    seed: u16,
     bump: u8,
 ) -> SolanaInstruction {
     let mut instruction = create_instruction(
@@ -125,7 +125,7 @@ fn init_account_ix(
     instruction
 }
 
-fn delegate_account_ix(payer: &Keypair, key: &Pubkey, seed: u8) -> SolanaInstruction {
+fn delegate_account_ix(payer: &Keypair, key: &Pubkey, seed: u16) -> SolanaInstruction {
     let mut instruction = create_instruction(
         key,
         Instruction::Delegate {

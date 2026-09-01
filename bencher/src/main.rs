@@ -1,6 +1,7 @@
 use core::{config::Config, stats::BenchStatistics, types::BenchResult};
 use std::{
     fs::{self, File},
+    io::{Error, ErrorKind},
     path::PathBuf,
     rc::Rc,
     sync::{
@@ -15,7 +16,7 @@ use json::writer::BufferedWriter;
 use keypair::Keypair;
 use runner::BenchRunner;
 use signal_hook::{consts::*, low_level};
-use signer::EncodableKey;
+use signer::{EncodableKey, Signer};
 use tokio::{runtime, sync::broadcast, task::LocalSet};
 use tracing_subscriber::EnvFilter;
 
@@ -36,8 +37,28 @@ fn main() -> BenchResult<()> {
     // Load the configuration from command-line arguments
     let config = Config::from_args()?;
     let keypairs: Vec<_> = (1..=usize::from(config.payers) * usize::from(config.parallelism))
-        .map(|n| Keypair::read_from_file(config.keypairs.join(format!("{n}.json"))))
+        .map(|n| config.keypairs.join(format!("{n}.json")))
+        .take_while(|path| path.exists())
+        .map(Keypair::read_from_file)
         .collect::<BenchResult<_>>()?;
+    let payers = usize::from(config.payers);
+    let workers = keypairs.len().div_ceil(payers);
+    if workers != usize::from(config.parallelism) {
+        return Err(Error::new(
+            ErrorKind::NotFound,
+            format!(
+                "found {} contiguous payer keypairs, need enough for {} workers of up to {} payers",
+                keypairs.len(),
+                config.parallelism,
+                config.payers,
+            ),
+        )
+        .into());
+    }
+    let account_base = keypairs
+        .first()
+        .expect("should have at least one payer")
+        .pubkey();
 
     // Set up signal handlers for graceful shutdown
     setup_signal_handlers()?;
@@ -48,13 +69,13 @@ fn main() -> BenchResult<()> {
 
     // Create and start the progress bar.
     let progress_bar = ProgressBar::new(
-        config.benchmark.iterations * config.parallelism as u64,
+        config.benchmark.iterations * u64::from(config.parallelism),
         progress.clone(),
     );
     let bar = thread::spawn(move || progress_bar.start());
 
     // Spawn a new thread for each keypair, up to the specified parallelism
-    for kp in keypairs.chunks(config.payers as usize) {
+    for (worker, kp) in keypairs.chunks(payers).enumerate() {
         let signers = kp.iter().map(|k| k.insecure_clone()).collect();
         let cfg = config.clone();
         let progress = progress.clone();
@@ -65,7 +86,10 @@ fn main() -> BenchResult<()> {
                 .unwrap();
             let local = LocalSet::new();
             let bencher = local
-                .block_on(&rt, BenchRunner::new(signers, cfg, progress))
+                .block_on(
+                    &rt,
+                    BenchRunner::new(signers, account_base, worker, cfg, progress),
+                )
                 .expect("failed to create bencher");
             let task = local.run_until(bencher.run());
             let results = rt.block_on(task);

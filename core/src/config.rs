@@ -38,7 +38,7 @@ pub struct Config {
     /// ## Payers/Signers
     ///
     /// Indicates the number of different payers/signers to use when sending transactions.
-    pub payers: u8,
+    pub payers: u16,
     /// ## Keypairs path
     ///
     /// Path to keypairs directory where vault and signer keypairs are stored
@@ -124,7 +124,7 @@ pub struct BenchmarkSettings {
     /// ## Accounts Count
     ///
     /// The number of accounts to use for RPC-based benchmarks.
-    pub accounts_count: u8,
+    pub accounts_count: u16,
     /// ## Mode
     ///
     /// The benchmark mode to execute, which can be a single mode or a mix of modes.

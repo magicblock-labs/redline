@@ -227,7 +227,7 @@ impl Closer {
         let space = self.config.data.account_size as u32;
         crate::common::iter_pdas(
             &self.keypairs,
-            self.config.payers as usize,
+            usize::from(self.config.payers),
             self.config.benchmark.accounts_count,
             space,
             self.config.authority,

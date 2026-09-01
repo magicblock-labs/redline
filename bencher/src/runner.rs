@@ -15,6 +15,7 @@ use core::{
     stats::{BenchStatistics, ObservationsStats},
 };
 use keypair::Keypair;
+use pubkey::Pubkey;
 use signer::EncodableKey;
 use std::{
     collections::HashMap,
@@ -84,6 +85,8 @@ impl BenchRunner {
     /// Creates a new `BenchRunner` instance, initializing all the necessary components.
     pub async fn new(
         signers: Vec<Keypair>,
+        account_base: Pubkey,
+        worker: usize,
         config: Config,
         progress: Arc<AtomicU64>,
     ) -> BenchResult<Self> {
@@ -126,6 +129,8 @@ impl BenchRunner {
             &config.benchmark.mode,
             &config,
             signers,
+            account_base,
+            worker,
             blockhash_provider.clone(),
         );
 

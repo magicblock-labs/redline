@@ -95,16 +95,14 @@ fn verify_account_owner(
 pub fn init_account(
     iter: &mut std::slice::Iter<AccountInfo>,
     space: u32,
-    seed: u8,
+    seed: u16,
     bump: u8,
     authority: Pubkey,
 ) -> ProgramResult {
     let payer = next_account_info(iter)?;
     let pda = next_account_info(iter)?;
     let base = next_account_info(iter)?;
-    let mut seeds = space.to_le_bytes().to_vec();
-    seeds.push(seed);
-    seeds.extend_from_slice(&authority.as_ref()[..16]);
+    let seeds = crate::utils::pda_seed(space, seed, authority);
     let seeds = [base.key.as_ref(), &seeds, &[bump]];
 
     create_pda(
@@ -129,7 +127,7 @@ pub fn init_account(
 ///
 /// Delegates a PDA to the Ephemeral Rollup (ER) program.
 /// Only the account owner can delegate.
-pub fn delegate_account(accs: &[AccountInfo], seed: u8, authority: Pubkey) -> ProgramResult {
+pub fn delegate_account(accs: &[AccountInfo], seed: u16, authority: Pubkey) -> ProgramResult {
     let owner = accs.first().ok_or(ProgramError::NotEnoughAccountKeys)?;
 
     let accounts = DelegateAccounts::try_from(accs)?;
@@ -138,9 +136,7 @@ pub fn delegate_account(accs: &[AccountInfo], seed: u8, authority: Pubkey) -> Pr
     verify_account_owner(owner, accounts.pda)?;
 
     let base = accs.last().ok_or(ProgramError::NotEnoughAccountKeys)?;
-    let mut seeds = (accounts.pda.data_len() as u32).to_le_bytes().to_vec();
-    seeds.push(seed);
-    seeds.extend_from_slice(&authority.as_ref()[..16]);
+    let seeds = crate::utils::pda_seed(accounts.pda.data_len() as u32, seed, authority);
     let seeds = [base.key.as_ref(), &seeds];
     let pda = *accounts.pda.key;
     let config = DelegateConfig {

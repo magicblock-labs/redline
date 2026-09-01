@@ -70,10 +70,10 @@ pub fn create_chain_client(config: &Config) -> Rc<RpcClient> {
 pub fn iter_pdas(
     keypairs: &[Keypair],
     payers_step: usize,
-    count: u8,
+    count: u16,
     space: u32,
     authority: Pubkey,
-) -> impl Iterator<Item = (Pubkey, u8, u8, Keypair)> + '_ {
+) -> impl Iterator<Item = (Pubkey, u8, u16, Keypair)> + '_ {
     keypairs.iter().step_by(payers_step).flat_map(move |kp| {
         (1..=count).map(move |seed| {
             let (pk, bump) = derive_pda(kp.pubkey(), space, seed, authority);
