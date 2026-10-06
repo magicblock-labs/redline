@@ -1,5 +1,11 @@
+use commitment::CommitmentConfig;
 use core::{config::Config, types::BenchResult};
-use std::{cell::RefCell, collections::HashSet, path::PathBuf, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashSet,
+    path::PathBuf,
+    rc::Rc,
+};
 
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
@@ -15,45 +21,53 @@ const COMMIT_BATCH_SIZE: usize = 4;
 const UNDELEGATION_WAIT_SECS: u64 = 10;
 const VERIFICATION_MAX_RETRIES: u32 = 5;
 const VERIFICATION_RETRY_DELAY_SECS: u64 = 20;
+const CLOSE_MAX_ATTEMPTS: u32 = 3;
 
 /// Closes benchmark accounts and refunds rent to vault.
 pub async fn close(path: PathBuf) -> BenchResult<()> {
     tracing::info!("using config file at {path:?} to close benchmark accounts");
     let config = Config::from_path(path)?;
-    let closer = Closer::new(&config).await?;
-    closer.close_accounts().await
+    let vault = crate::common::load_vault(&config)?;
+    let accounts = {
+        let keypairs = crate::common::load_payers(&config)?;
+        crate::common::iter_pdas(
+            &keypairs,
+            usize::from(config.payers),
+            config.benchmark.accounts_count,
+            config.data.account_size as u32,
+            config.authority,
+        )
+        .map(|(pubkey, _, _, _)| pubkey)
+        .collect()
+    };
+    let closer = Rc::new(Closer {
+        vault,
+        ephem_client: crate::common::create_ephem_client(&config),
+        chain_client: crate::common::create_chain_client(&config),
+    });
+    closer.close_accounts(accounts).await
 }
 
 /// Manages the closing of benchmark accounts.
 struct Closer {
-    config: Config,
     vault: Keypair,
     ephem_client: Rc<RpcClient>,
     chain_client: Rc<RpcClient>,
-    keypairs: Vec<Keypair>,
 }
 
 impl Closer {
-    async fn new(config: &Config) -> BenchResult<Rc<Self>> {
-        Ok(Self {
-            config: config.clone(),
-            vault: crate::common::load_vault(config)?,
-            keypairs: crate::common::load_payers(config)?,
-            ephem_client: crate::common::create_ephem_client(config),
-            chain_client: crate::common::create_chain_client(config),
-        }
-        .into())
-    }
-
-    async fn close_accounts(self: &Rc<Self>) -> BenchResult<()> {
-        let accounts = self.extract_accounts();
-        tracing::info!("closing {} accounts", accounts.len());
+    async fn close_accounts(self: &Rc<Self>, accounts: HashSet<Pubkey>) -> BenchResult<()> {
+        let total = accounts.len();
+        let vault = self.vault.pubkey();
+        let balance = self.chain_client.get_balance(&vault).await?;
+        tracing::info!(%vault, balance_lamports = balance, accounts = total, "starting account cleanup");
 
         let (delegated, non_delegated) = self.separate_by_delegation(accounts).await?;
         tracing::info!(
-            "found {} delegated and {} non-delegated accounts",
+            "found {} delegated, {} non-delegated and {} absent accounts",
             delegated.len(),
-            non_delegated.len()
+            non_delegated.len(),
+            total - delegated.len() - non_delegated.len()
         );
 
         if !delegated.is_empty() {
@@ -76,13 +90,18 @@ impl Closer {
             // Commit and undelegate this batch
             let hash = self.ephem_client.get_latest_blockhash().await?;
             let ix = self.build_commit_undelegate_ix(idx as u64, payer, batch);
-            let txn = Transaction::new_signed_with_payer(
-                &[ix],
-                Some(&payer),
-                &[&self.vault],
-                hash,
-            );
-            self.ephem_client.send_and_confirm_transaction(&txn).await?;
+            let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&self.vault], hash);
+            let signature = txn.signatures[0];
+            tracing::info!(%signature, batch = idx + 1, accounts = ?batch, "sending commit-and-undelegate to ER");
+            self.ephem_client
+                .send_and_confirm_transaction(&txn)
+                .await
+                .map_err(|err| {
+                    format!(
+                        "ER commit-and-undelegate batch {} transaction {signature}: {err:?}",
+                        idx + 1
+                    )
+                })?;
             tracing::info!(
                 "batch {}/{}: committed and undelegated {} accounts",
                 idx + 1,
@@ -119,11 +138,19 @@ impl Closer {
             let this = self.clone();
 
             move || async move {
-                let account = this.chain_client.get_account(&pubkey).await?;
-                if account.owner == DELEGATION_PROGRAM_ID {
+                let Some(owner) = this.account_owner(pubkey, "base-chain lookup").await? else {
+                    tracing::info!(account = %pubkey, "skipping absent account");
+                    return Ok(());
+                };
+                if owner == DELEGATION_PROGRAM_ID {
                     delegated.borrow_mut().push(pubkey);
-                } else {
+                } else if owner == program::id() {
                     non_delegated.borrow_mut().push(pubkey);
+                } else {
+                    return Err(format!(
+                        "account {pubkey} has unexpected base-chain owner {owner}"
+                    )
+                    .into());
                 }
                 Ok(())
             }
@@ -136,7 +163,6 @@ impl Closer {
         ))
     }
 
-
     async fn verify_undelegation(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
         for retry in 0..VERIFICATION_MAX_RETRIES {
             tracing::info!(
@@ -145,23 +171,25 @@ impl Closer {
                 VERIFICATION_MAX_RETRIES
             );
 
-            let still_delegated = Rc::new(RefCell::new(Vec::new()));
+            let still_delegated = Rc::new(Cell::new(0));
 
             crate::common::run_concurrent(accounts.iter().map(|&pubkey| {
                 let still_delegated = still_delegated.clone();
                 let this = self.clone();
 
                 move || async move {
-                    let account = this.chain_client.get_account(&pubkey).await?;
-                    if account.owner == DELEGATION_PROGRAM_ID {
-                        still_delegated.borrow_mut().push(pubkey);
+                    if this.account_owner(pubkey, "undelegation lookup").await?
+                        == Some(DELEGATION_PROGRAM_ID)
+                    {
+                        tracing::warn!(account = %pubkey, "account still delegated on base chain");
+                        still_delegated.set(still_delegated.get() + 1);
                     }
                     Ok(())
                 }
             }))
             .await?;
 
-            let count = still_delegated.borrow().len();
+            let count = still_delegated.get();
             if count == 0 {
                 tracing::info!("all accounts successfully undelegated");
                 return Ok(());
@@ -176,26 +204,71 @@ impl Closer {
         Err("accounts still delegated after maximum retries".into())
     }
 
-    async fn close_on_chain(self: &Rc<Self>, accounts: &[Pubkey]) -> BenchResult<()> {
+    /// Reads base-chain ownership at the same commitment used to confirm transactions.
+    /// Missing accounts are expected when resuming a partially completed cleanup.
+    async fn account_owner(&self, pubkey: Pubkey, context: &str) -> BenchResult<Option<Pubkey>> {
+        Ok(self
+            .chain_client
+            .get_account_with_commitment(&pubkey, CommitmentConfig::confirmed())
+            .await
+            .map_err(|err| format!("{context} for {pubkey}: {err:?}"))?
+            .value
+            .map(|account| account.owner))
+    }
+
+    async fn close_on_chain(&self, accounts: &[Pubkey]) -> BenchResult<()> {
         tracing::info!("closing {} accounts on base chain", accounts.len());
 
+        // Every close writes the vault; serialize to avoid shared-account contention.
+        for &pubkey in accounts {
+            self.close_account(pubkey).await?;
+        }
+        Ok(())
+    }
+
+    async fn close_account(&self, pubkey: Pubkey) -> BenchResult<()> {
         let payer = self.vault.pubkey();
-
-        crate::common::run_concurrent(accounts.iter().map(|&pubkey| {
-            let this = self.clone();
-
-            move || async move {
-                let hash = this.chain_client.get_latest_blockhash().await?;
-                let ix = this.build_close_ix(payer, pubkey);
-                let txn =
-                    Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&this.vault], hash);
-
-                this.chain_client.send_and_confirm_transaction(&txn).await?;
-                tracing::info!("closed account {} on base chain", pubkey);
-                Ok(())
+        for attempt in 1..=CLOSE_MAX_ATTEMPTS {
+            // A previous attempt may have landed despite a confirmation error.
+            if self
+                .account_owner(pubkey, "base-chain lookup")
+                .await?
+                .is_none()
+            {
+                tracing::info!(account = %pubkey, "account already absent on base chain");
+                break;
             }
-        }))
-        .await
+            let hash = self
+                .chain_client
+                .get_latest_blockhash()
+                .await
+                .map_err(|err| format!("base-chain blockhash for closing {pubkey}: {err:?}"))?;
+            let ix = self.build_close_ix(payer, pubkey);
+            let txn = Transaction::new_signed_with_payer(&[ix], Some(&payer), &[&self.vault], hash);
+            let signature = txn.signatures[0];
+            tracing::info!(account = %pubkey, %signature, attempt, "sending close to base chain");
+            let Err(err) = self.chain_client.send_and_confirm_transaction(&txn).await else {
+                tracing::info!(account = %pubkey, %signature, "closed account on base chain");
+                break;
+            };
+            tracing::warn!(account = %pubkey, %signature, attempt, error = ?err, "base-chain close failed");
+            if attempt == CLOSE_MAX_ATTEMPTS || err.get_transaction_error().is_some() {
+                let context =
+                    format!("base-chain close for {pubkey}, transaction {signature}: {err:?}");
+                if self
+                    .account_owner(pubkey, "state lookup")
+                    .await
+                    .map_err(|lookup_err| format!("{context}; {lookup_err}"))?
+                    .is_none()
+                {
+                    tracing::info!(account = %pubkey, %signature, "account absent after close confirmation error");
+                    break;
+                }
+                return Err(context.into());
+            }
+            sleep(Duration::from_secs(2)).await;
+        }
+        Ok(())
     }
 
     fn build_commit_undelegate_ix(
@@ -221,18 +294,5 @@ impl Closer {
             AccountMeta::new(account, false),
         ];
         SolanaInstruction::new_with_bincode(program::id(), &ix, metas)
-    }
-
-    fn extract_accounts(&self) -> HashSet<Pubkey> {
-        let space = self.config.data.account_size as u32;
-        crate::common::iter_pdas(
-            &self.keypairs,
-            usize::from(self.config.payers),
-            self.config.benchmark.accounts_count,
-            space,
-            self.config.authority,
-        )
-        .map(|(pubkey, _, _, _)| pubkey)
-        .collect()
     }
 }
