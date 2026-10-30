@@ -51,7 +51,7 @@ pub struct BenchRunner {
     /// A map of databases for tracking the delivery of each type of request.
     delivery_confirmations: HashMap<&'static str, ConfirmationsDB<()>>,
     /// A manager for periodically transferring lamports to trigger account cloning.
-    transfer_manager: TransferManager,
+    transfer_manager: Option<TransferManager>,
     /// A manager for controlling the rate of requests per second
     rate_manager: RateManager,
     /// The benchmark configuration.
@@ -159,11 +159,12 @@ impl BenchRunner {
             }
             tokio::time::sleep(Duration::from_secs(1)).await
         }
-        // The vault is a pre-funded account that is used to trigger account cloning.
-        let vault = Keypair::read_from_file(config.keypairs.join("vault.json"))
-            .expect("failed to read vault keypair");
-        let transfer_manager =
-            TransferManager::new(&config, vault, &accounts, blockhash_provider).await;
+        let transfer_manager = if config.benchmark.clone_frequency_ms == 0 {
+            None
+        } else {
+            let vault = Keypair::read_from_file(config.keypairs.join("vault.json"))?;
+            Some(TransferManager::new(&config, vault, &accounts, blockhash_provider).await)
+        };
 
         Ok(Self {
             request_builder,
@@ -194,7 +195,9 @@ impl BenchRunner {
 
             // This will trigger an account update on the main chain, which in turn
             // will trigger an account clone on the Ephemeral Rollup.
-            self.transfer_manager.transfer();
+            if let Some(manager) = &mut self.transfer_manager {
+                manager.transfer();
+            }
 
             self.step(i).await;
             // report progress

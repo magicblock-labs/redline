@@ -15,7 +15,7 @@ use http_body_util::BodyExt;
 use hyper::body::{Bytes, Incoming};
 use hyper::client::conn::http1::SendRequest as Http1Sender;
 use hyper::client::conn::http2::SendRequest as Http2Sender;
-use hyper::header::{HeaderValue, CONTENT_TYPE};
+use hyper::header::{HeaderValue, CONTENT_TYPE, HOST};
 use hyper::{Method, Request, Response, Uri};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use json::LazyValue;
@@ -38,6 +38,7 @@ pub enum InnerConnection {
 pub struct Connection {
     inner: InnerConnection,
     uri: Uri,
+    host: HeaderValue,
 }
 
 /// # Connection Pool
@@ -103,6 +104,7 @@ impl Connection {
         *request.method_mut() = Method::POST;
         let ct = HeaderValue::from_static("application/json");
         request.headers_mut().insert(CONTENT_TYPE, ct);
+        request.headers_mut().insert(HOST, self.host.clone());
         match &mut self.inner {
             InnerConnection::Http1(sender) => ParsedResponse {
                 pending: Box::pin(sender.send_request(request)),
@@ -154,6 +156,12 @@ impl Connection {
         Ok(Self {
             inner,
             uri: url.0.clone(),
+            host: HeaderValue::from_str(
+                url.0
+                    .authority()
+                    .ok_or("endpoint has no authority")?
+                    .as_str(),
+            )?,
         })
     }
 }
