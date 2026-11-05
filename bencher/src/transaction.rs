@@ -1,4 +1,4 @@
-use core::types::BenchMode;
+use core::{config::Config, types::BenchMode};
 use hash::Hash;
 use instruction::{AccountMeta, Instruction as SolanaInstruction};
 use keypair::Keypair;
@@ -17,7 +17,7 @@ pub trait TransactionProvider {
     /// Returns the name of the benchmark mode.
     fn name(&self) -> &'static str;
     /// Generates the instruction for the transaction.
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction;
+    fn generate_ix(&mut self, id: u64, payer: Pubkey) -> SolanaInstruction;
 
     /// Wraps a given instruction in a `SolanaInstruction`.
     fn wrap_ix(&self, ix: Instruction, accounts: Vec<AccountMeta>) -> SolanaInstruction {
@@ -26,7 +26,7 @@ pub trait TransactionProvider {
 
     /// Generates a complete, signed transaction.
     fn generate(&mut self, id: u64, blockhash: Hash, signer: &Keypair) -> Transaction {
-        let ix = self.generate_ix(id);
+        let ix = self.generate_ix(id, signer.pubkey());
         let mut tx = Transaction::new_with_payer(&[ix], Some(&signer.pubkey()));
         tx.sign(&[signer], blockhash);
         tx
@@ -103,13 +103,16 @@ pub struct ReadOnlyProvider(BaseProvider<true>);
 /// # Commit Provider
 ///
 /// Generates transactions that commit the state to the base chain in the Ephemeral Rollup.
-pub struct CommitProvider(BaseProvider<true>);
+pub struct CommitProvider {
+    base: BaseProvider<true>,
+    fee_vault: Option<Pubkey>,
+}
 
 impl TransactionProvider for SimpleByteSetProvider {
     fn name(&self) -> &'static str {
         "SimpleByteSet"
     }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+    fn generate_ix(&mut self, id: u64, _payer: Pubkey) -> SolanaInstruction {
         let ix = Instruction::SimpleByteSet { id };
         let accounts = self.0.random_accounts();
         self.wrap_ix(ix, accounts)
@@ -123,7 +126,7 @@ impl TransactionProvider for HighCuCostProvider {
     fn name(&self) -> &'static str {
         "HighCuCost"
     }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+    fn generate_ix(&mut self, id: u64, _payer: Pubkey) -> SolanaInstruction {
         // Use first account as init parameter
         let init = self.accounts[0];
         let ix = Instruction::ExpensiveHashCompute {
@@ -149,7 +152,7 @@ impl TransactionProvider for ReadWriteProvider {
     fn name(&self) -> &'static str {
         "ReadWrite"
     }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+    fn generate_ix(&mut self, id: u64, _payer: Pubkey) -> SolanaInstruction {
         let ix = Instruction::AccountDataCopy { id };
         // Randomly select accounts for this transaction
         let selected = self
@@ -182,7 +185,7 @@ impl TransactionProvider for ReadOnlyProvider {
     fn name(&self) -> &'static str {
         "ReadOnly"
     }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+    fn generate_ix(&mut self, id: u64, _payer: Pubkey) -> SolanaInstruction {
         let ix = Instruction::ReadAccountsData { id };
         let accounts = self.0.random_accounts();
         self.wrap_ix(ix, accounts)
@@ -197,25 +200,31 @@ impl TransactionProvider for CommitProvider {
     fn name(&self) -> &'static str {
         "Commit"
     }
-    fn generate_ix(&mut self, id: u64) -> SolanaInstruction {
+    fn generate_ix(&mut self, id: u64, payer: Pubkey) -> SolanaInstruction {
         let ix = Instruction::CommitAccounts { id };
         let mut accounts = vec![
+            AccountMeta::new(payer, true),
             AccountMeta::new(MAGIC_CONTEXT_ID, false),
             AccountMeta::new_readonly(MAGIC_PROGRAM_ID, false),
         ];
-        accounts.extend(self.0.random_accounts());
+        accounts.extend(self.fee_vault.map(|vault| AccountMeta::new(vault, false)));
+        accounts.extend(self.base.random_accounts());
         self.wrap_ix(ix, accounts)
     }
 
     fn accounts(&self) -> Vec<Pubkey> {
-        self.0.accounts.clone()
+        self.base.accounts.clone()
     }
 }
 
 /// # Make Provider
 ///
 /// A factory function that creates a transaction provider based on the provided benchmark mode.
-pub fn make_provider(mode: &BenchMode, accounts: Vec<Pubkey>) -> Box<dyn TransactionProvider> {
+pub fn make_provider(
+    mode: &BenchMode,
+    accounts: Vec<Pubkey>,
+    config: &Config,
+) -> Box<dyn TransactionProvider> {
     match mode {
         BenchMode::SimpleByteSet {
             accounts_per_transaction,
@@ -247,10 +256,17 @@ pub fn make_provider(mode: &BenchMode, accounts: Vec<Pubkey>) -> Box<dyn Transac
         ))),
         BenchMode::Commit {
             accounts_per_transaction,
-        } => Box::new(CommitProvider(BaseProvider::new(
-            accounts,
-            *accounts_per_transaction as usize,
-        ))),
+        } => Box::new(CommitProvider {
+            base: BaseProvider::new(accounts, *accounts_per_transaction as usize),
+            // Paid preparation delegates the signers, so Magic requires its fee vault.
+            fee_vault: (!config.gasless).then(|| {
+                Pubkey::find_program_address(
+                    &[b"magic-fee-vault", config.authority.as_ref()],
+                    &program::DELEGATION_PROGRAM_ID,
+                )
+                .0
+            }),
+        }),
         // This function is only for transaction-based modes, so it will panic
         // if an RPC-based mode is provided.
         _ => panic!("Unsupported mode for make_provider"),
